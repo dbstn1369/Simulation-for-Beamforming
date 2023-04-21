@@ -17,6 +17,8 @@ actor_lr = 0.001
 critic_lr = 0.001
 discount_factor = 0.99
 
+
+
 actor = Actor(num_states, num_actions)
 critic = Critic(num_states)
 actor_optimizer = optim.Adam(actor.parameters(), lr=actor_lr)
