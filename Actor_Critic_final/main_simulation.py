@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from ac_models import Actor, Critic
+from ac_models import Actor, Critic, MemoryBuffer
 from network_elements import AccessPoint, calculate_state_variables
 
 
@@ -22,6 +22,10 @@ critic = Critic(num_states)
 actor_optimizer = optim.Adam(actor.parameters(), lr=actor_lr)
 critic_optimizer = optim.Adam(critic.parameters(), lr=critic_lr)
 
+memory_buffer_capacity = 10000
+batch_size = 32
+memory_buffer = MemoryBuffer(memory_buffer_capacity)
+
 
 def choose_action(state):
     state_tensor = torch.FloatTensor(state).unsqueeze(0)
@@ -31,25 +35,54 @@ def choose_action(state):
     action = torch.multinomial(action_probs + 1e-8, 1).item()  # Add a small constant value to action_probs
     return action
 
-def update_actor_critic(state, action, reward, next_state):
-    state_tensor = torch.FloatTensor(state).unsqueeze(0)
-    next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
-    action_tensor = torch.LongTensor([action])
+# def update_actor_critic(state, action, reward, next_state):
 
-    value = critic(state_tensor)
-    next_value = critic(next_state_tensor).detach()
-    target_value = reward + discount_factor * next_value
 
-    critic_loss = nn.MSELoss()(value, target_value)
+#     state_tensor = torch.FloatTensor(state).unsqueeze(0)
+#     next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
+#     action_tensor = torch.LongTensor([action])
+
+#     value = critic(state_tensor)
+#     next_value = critic(next_state_tensor).detach()
+#     target_value = reward + discount_factor * next_value
+
+#     critic_loss = nn.MSELoss()(value, target_value)
+#     critic_optimizer.zero_grad()
+#     critic_loss.backward()
+#     critic_optimizer.step()
+
+#     action_prob = actor(state_tensor)
+#     selected_action_prob = action_prob.gather(1, action_tensor.unsqueeze(1)).squeeze()
+#     advantage = (target_value - value).detach()
+
+#     actor_loss = -torch.log(selected_action_prob) * advantage
+#     actor_optimizer.zero_grad()
+#     actor_loss.backward()
+#     actor_optimizer.step()
+
+def update_actor_critic_batch(batch):
+    states, actions, rewards, next_states = zip(*batch)
+
+    states_tensor = torch.FloatTensor(states)
+    next_states_tensor = torch.FloatTensor(next_states)
+    actions_tensor = torch.LongTensor(actions)
+    rewards_tensor = torch.FloatTensor(rewards)
+
+    values = critic(states_tensor)
+    next_values = critic(next_states_tensor).detach()
+    target_values = rewards_tensor + discount_factor * next_values
+
+    critic_loss = nn.MSELoss()(values, target_values)
     critic_optimizer.zero_grad()
     critic_loss.backward()
     critic_optimizer.step()
 
-    action_prob = actor(state_tensor)
-    selected_action_prob = action_prob.gather(1, action_tensor.unsqueeze(1)).squeeze()
-    advantage = (target_value - value).detach()
+    action_probs = actor(states_tensor)
+    selected_action_probs = action_probs.gather(1, actions_tensor.unsqueeze(1)).squeeze()
+    advantages = (target_values - values).detach()
 
-    actor_loss = -torch.log(selected_action_prob) * advantage
+    actor_loss = -torch.log(selected_action_probs) * advantages
+    actor_loss = torch.mean(actor_loss)  # Add this line to calculate the mean of the actor loss
     actor_optimizer.zero_grad()
     actor_loss.backward()
     actor_optimizer.step()
@@ -75,8 +108,6 @@ def get_new_state(AP, STS):
     sts_count, Cog, delta_u_norm = calculate_state_variables(AP.STS, AP.BI, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
 
     return [sts_count, Cog, delta_u_norm]
-
-
 
 
 
@@ -122,8 +153,12 @@ for episode in range(100):
             s_time += time_difference
             reward = get_reward(AP,successful_ssw_count, STS, prev_STS)  # Pass the prev_STS variable
             next_state = get_new_state(AP, STS)
+            memory_buffer.push(state, action, reward, next_state)
+           
 
-            update_actor_critic(state, action, reward, next_state)  # 변경된 부분
+            if len(memory_buffer) >= batch_size:
+                batch = memory_buffer.sample(batch_size)
+                update_actor_critic_batch(batch)
 
             AP.next_bi()
 
@@ -136,179 +171,3 @@ for episode in range(100):
         f.write(f"{total_time:.3f}, {total_STS_used}\n")  # 누적된 STS 값을 함께 저장
 
 
-import random
-import numpy as np
-import random
-import numpy as np
-import torch
-import torch.nn as nn
-
-
-
-def calculate_state_variables(STS, BI, s_sts, AP):
-    # Calculate current STS count
-    if isinstance(STS, int):
-        s_sts = STS
-    else:
-        s_sts = int(STS)
-
-    # Calculate propagation delay
-    propagation_delay = []
-    for sts in range(s_sts):
-        STA_positions = np.linspace(AP.min_distance, AP.max_distance)
-        delay = np.linalg.norm(STA_positions - 0) / 3e8  # Speed of light
-        propagation_delay.append(delay)
-    s_pd = np.mean(propagation_delay)
-    S_min = AP.min_distance / 3e8
-    S_max = AP.max_distance / 3e8
-    S_norm = (s_pd - S_min) / (S_max - S_min)
-    W = 1 - S_norm
-
-    # Calculate congestion
-    weighted_snr_sum = 0
-    weight_sum = 0
-    for ssw in AP.ssw_list:
-        weighted_snr_sum += W * ssw.snr
-        weight_sum += W
-    if weight_sum != 0:
-        s_c = weighted_snr_sum / weight_sum
-        C_norm = (s_c - np.mean([ssw.snr for ssw in AP.ssw_list])) / np.std([ssw.snr for ssw in AP.ssw_list])
-        C_k = 1 - C_norm
-
-    # Calculate STS usage
-    N_ack = sum([1 for station in AP.stations if station.data_success])
-    U_current = N_ack / STS
-    U_previous = s_sts
-    delta_U = U_current - U_previous
-    delta_U_min = 0
-    delta_U_max = 32
-    delta_U_norm = (delta_U - delta_U_min) / (delta_U_max - delta_U_min)
-
-    return s_sts, W, C_k, delta_U_norm
-
-
-def SINR(received_signal, interfering_signals, noise_power=1e-9):
-    interference = sum(interfering_signals)
-    return received_signal / (interference + noise_power)
-
-def SNR():
-    # 신호 레벨 범위 (dBm 단위)
-    min_signal_level = -80
-    max_signal_level = -40
-
-    # 무작위 신호 레벨 개수
-    num_signal_levels = 5
-
-    # 무작위 신호 레벨 생성
-    random_signal_levels = np.random.uniform(min_signal_level, max_signal_level, num_signal_levels)
-    print("Random signal levels (dBm):", random_signal_levels)
-    return random_signal_levels
-
-class AccessPoint:
-    def __init__(self, num_stations, STS, min_distance=0, max_distance=100):  # min_distance와 max_distance 매개변수 추가
-        self.num_stations = num_stations
-        self.STS = STS
-        self.num_sector = 6
-        self.ssw_list = []
-        self.min_distance = min_distance  # 최소 거리
-        self.max_distance = max_distance  # 최대 거리
-        station_positions = np.linspace(self.min_distance, self.max_distance, num_stations)  # Assign positions to stations
-        self.BI = Station(random.randint(1, num_stations), STS, position=random.choice(station_positions))  # Initialize BI with a random station instance
-        self.stations = [Station(i, STS, position=station_positions[i]) for i in range(num_stations)]  # Assign positions to stations
-        
-
-    def start_beamforming_training(self):
-        self.sinr_values = []
-
-        beacon_frame = self.create_beacon_frame_with_trn_r()
-        for station in self.stations:
-            station.receive_bti(beacon_frame)
-            station.receive_trn_r(beacon_frame)
-
-    def create_beacon_frame_with_trn_r(self):
-        return {'SNR': SNR(), 'trn_r': 'TRN-R data'}
-
-    def recieve(self, sector):
-        successful_ssw_count = 0
-        received_signals = []
-        if sector >= len(self.sinr_values):
-            return [], successful_ssw_count
-        for i in range(self.STS):
-            for station in self.stations:
-                if not station.pair and sector == station.tx_sector_AP:
-                    signal = station.send_ssw(i, sector)
-                    if signal is not None:
-                        received_signals.append(signal)
-                    if station.data_success:
-                        successful_ssw_count += 1
-            if len(received_signals) > 1:
-                sinr_values = [SINR(signal, [s for s in received_signals if s != signal]) for signal in received_signals]
-                self.sinr_values[sector].extend(sinr_values)
-        if not self.sinr_values[sector]:
-            return [], successful_ssw_count
-        else:
-            return self.sinr_values[sector], successful_ssw_count
-
-    def broadcast_ack(self):
-        ack_frame = "ACK_DATA"
-        for station in self.stations:
-            if station.pair == False:
-                station.receive_ack_frame(ack_frame)
-
-    def next_bi(self):
-        self.start_beamforming_training()
-        for i in range(self.num_sector):
-            successful_ssw_count, sinr_values = self.recieve(i)  # sinr_values 반환값 추가
-        self.broadcast_ack()
-
-    def all_stations_paired(self):
-        return all(station.pair for station in self.stations)
-
-import random
-class Station:
-    def __init__(self, id, STS, position=None):  # Add position parameter with default value None
-        self.id = id
-        self.pair = False
-        self.tx_sector_AP = None
-        self.rx_sector = None
-        self.collisions = 0
-        self.data_success = False
-        self.sectors = [i for i in range(1, 5)]
-        self.backoff_count = random.randint(1, STS)
-        
-
-
-    def receive_bti(self, beacon_frame):
-        self.tx_sector_AP = self.get_best_sectors(beacon_frame)
-        print(f"Station {self.id}: Best TX sector of AP - {self.tx_sector_AP}")
-
-    def get_best_sectors(self, beacon_frame):
-        snr_values = beacon_frame['SNR']
-        best_sector = np.argmax(snr_values) + 1
-        return best_sector
-
-    def receive_trn_r(self, beacon_frame):
-        best_rx_sector = self.get_best_rx_sector(beacon_frame)
-        self.rx_sector = best_rx_sector  # rx_sector에 할당하는 부분 추가
-        print(f"Station {self.id}: Best RX sector of STA after TRN-R - {best_rx_sector}")
-
-    def get_best_rx_sector(self, beacon_frame):
-        snr_values = SNR()
-        best_rx_sector = np.argmax(snr_values) % len(self.sectors) + 1
-        return best_rx_sector
-
-    def send_ssw(self, STS, sector):
-        if not self.pair and STS == self.backoff_count:  # 이미 연결된 STA들이 참여하지 않도록 조건 추가
-            self.rx_sector = None
-            self.data_success = True
-            print("Station " + str(self.id) + " transmitted SSW frame successfully")
-            return random.uniform(0.0001, 0.001)  # 임의의 수신 신호 전송
-        return None
-
-    def receive_ack_frame(self, ack_frame):
-        if self.pair == False:
-            if self.data_success == True:
-                self.pair = True
-                print("Station " + str(self.id) + " received ACK successfully")
-        else:
-            print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
