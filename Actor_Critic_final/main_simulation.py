@@ -8,8 +8,8 @@ from ac_models import Actor, Critic, MemoryBuffer
 from network_elements import AccessPoint, calculate_state_variables
 
 
-STS = 32
-AP = AccessPoint(num_stations=5, STS=STS)
+STS = 5
+AP = AccessPoint(num_stations=3, STS=STS)
 
 num_states = 3
 num_actions = 3
@@ -114,7 +114,7 @@ for episode in range(1):
         successful_ssw_count = 0
         sinr_values = []
         for i in range(AP.num_sector):
-            sinr_values_sector, successful_ssw_count_sector = AP.recieve(i)
+            sinr_values_sector, successful_ssw_count_sector = AP.recieve(i+1)
             if sinr_values_sector:  # Check if the list is not empty
                 sinr_values.extend(sinr_values_sector)
             successful_ssw_count += successful_ssw_count_sector

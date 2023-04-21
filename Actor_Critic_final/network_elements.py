@@ -80,7 +80,7 @@ class Station:
         self.rx_sector = None
         self.collisions = 0
         self.data_success = False
-        self.sectors = [i for i in range(1, 5)]
+        self.sectors = [i for i in range(1, 3)]
         self.backoff_count = random.randint(1, STS)
         self.AP = AP
 
