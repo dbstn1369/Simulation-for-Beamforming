@@ -7,78 +7,22 @@ import torch.nn as nn
 
 
 
-def calculate_state_variables(STS, BI, s_sts, AP):
-    C_k = 0
-    # Calculate current STS count
-    if isinstance(STS, int):
-        s_sts = STS
-    else:
-        s_sts = int(STS)
-
-    # Calculate propagation delay
-    propagation_delay = []
-    for sts in range(s_sts):
-        STA_positions = np.linspace(AP.min_distance, AP.max_distance)
-        delay = np.linalg.norm(STA_positions - 0) / 3e8  # Speed of light
-        propagation_delay.append(delay)
-    s_pd = np.mean(propagation_delay)
-    S_min = AP.min_distance / 3e8
-    S_max = AP.max_distance / 3e8
-    S_norm = (s_pd - S_min) / (S_max - S_min)
-    W = 1 - S_norm
-
-    # Calculate congestion
-    weighted_snr_sum = 0
-    weight_sum = 0
-    for ssw in AP.ssw_list:
-        weighted_snr_sum += W * ssw.snr
-        weight_sum += W
-    if weight_sum != 0:
-        s_c = weighted_snr_sum / weight_sum
-        C_norm = (s_c - np.mean([ssw.snr for ssw in AP.ssw_list])) / np.std([ssw.snr for ssw in AP.ssw_list])
-        C_k = 1 - C_norm
-
-    # Calculate STS usage
-    N_ack = sum([1 for station in AP.stations if station.data_success])
-    U_current = N_ack / STS
-    U_previous = s_sts
-    delta_U = U_current - U_previous
-    delta_U_min = 0
-    delta_U_max = 32
-    delta_U_norm = (delta_U - delta_U_min) / (delta_U_max - delta_U_min)
-
-    return s_sts, C_k, delta_U_norm
-
-
-def SINR(received_signal, interfering_signals, noise_power=1e-9):
-    interference = sum(interfering_signals)
-    return received_signal / (interference + noise_power)
-
-def SNR():
-    # 신호 레벨 범위 (dBm 단위)
-    min_signal_level = -80
-    max_signal_level = -40
-
-    # 무작위 신호 레벨 개수
-    num_signal_levels = 5
-
-    # 무작위 신호 레벨 생성
-    random_signal_levels = np.random.uniform(min_signal_level, max_signal_level, num_signal_levels)
-    print("Random signal levels (dBm):", random_signal_levels)
-    return random_signal_levels
-
 class AccessPoint:
-    def __init__(self, num_stations, STS, min_distance=0, max_distance=100):  # min_distance와 max_distance 매개변수 추가
+    def __init__(self, num_stations, STS, min_distance=10, max_distance=100):
         self.num_stations = num_stations
         self.STS = STS
         self.num_sector = 6
         self.ssw_list = []
-        self.min_distance = min_distance  # 최소 거리
-        self.max_distance = max_distance  # 최대 거리
-        station_positions = np.linspace(self.min_distance, self.max_distance, num_stations)  # Assign positions to stations
-        self.BI = Station(random.randint(1, num_stations), STS, position=random.choice(station_positions))  # Initialize BI with a random station instance
-        self.stations = [Station(i, STS, position=station_positions[i]) for i in range(num_stations)]  # Assign positions to stations
-        
+        self.min_distance = min_distance
+        self.max_distance = max_distance
+        station_positions = np.linspace(self.min_distance, self.max_distance, num_stations)
+        self.stations = [Station(i, STS, position=station_positions[i], AP=self) for i in range(self.num_stations)]
+        self.BI = self.stations[random.randint(0, num_stations-1)]
+        self.set_random_position()
+
+    def set_random_position(self):
+        for station in self.stations:
+            station.position = np.random.uniform(self.min_distance, self.max_distance)
 
     def start_beamforming_training(self):
         self.sinr_values = []
@@ -127,9 +71,9 @@ class AccessPoint:
     def all_stations_paired(self):
         return all(station.pair for station in self.stations)
 
-import random
+
 class Station:
-    def __init__(self, id, STS, position=None):  # Add position parameter with default value None
+    def __init__(self, id, STS, position=None, AP=None):
         self.id = id
         self.pair = False
         self.tx_sector_AP = None
@@ -138,7 +82,7 @@ class Station:
         self.data_success = False
         self.sectors = [i for i in range(1, 5)]
         self.backoff_count = random.randint(1, STS)
-        
+        self.AP = AP
 
 
     def receive_bti(self, beacon_frame):
@@ -175,3 +119,63 @@ class Station:
                 print("Station " + str(self.id) + " received ACK successfully")
         else:
             print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
+
+
+def calculate_state_variables(STS, s_sts, AP):
+    C_k = 0
+    # Calculate current STS count
+    if isinstance(STS, int):
+        s_sts = STS
+    else:
+        s_sts = int(STS)
+
+    propagation_delay = []
+    for station in AP.stations:
+        delay = np.linalg.norm(station.position - 0) / 3e8
+        propagation_delay.append(delay)
+
+    min_propagation_delay = np.linalg.norm(AP.min_distance) / 3e8
+    max_propagation_delay = np.linalg.norm(AP.max_distance) / 3e8
+
+    s_pd = np.mean(propagation_delay)
+    S_norm = (s_pd - min_propagation_delay) / (max_propagation_delay - min_propagation_delay)
+    W = 1 - S_norm
+    print(f"S_norm: ", S_norm)
+    # Calculate congestion
+    weighted_snr_sum = 0
+    weight_sum = 0
+    for ssw in AP.ssw_list:
+        weighted_snr_sum += W * ssw.snr
+        weight_sum += W
+    if weight_sum != 0:
+        s_c = weighted_snr_sum / weight_sum
+        C_norm = (s_c - np.mean([ssw.snr for ssw in AP.ssw_list])) / np.std([ssw.snr for ssw in AP.ssw_list])
+        C_k = 1 - C_norm
+
+    # Calculate STS usage
+    N_ack = sum([1 for station in AP.stations if station.data_success])
+    U_current = N_ack / STS
+    U_previous = s_sts
+    delta_U = U_current - U_previous
+    delta_U_min = 0
+    delta_U_max = 32
+    delta_U_norm = (delta_U - delta_U_min) / (delta_U_max - delta_U_min)
+
+    return s_sts, C_k, delta_U_norm
+
+def SINR(received_signal, interfering_signals, noise_power=1e-9):
+    interference = sum(interfering_signals)
+    return received_signal / (interference + noise_power)
+
+def SNR():
+    # 신호 레벨 범위 (dBm 단위)
+    min_signal_level = -80
+    max_signal_level = -40
+
+    # 무작위 신호 레벨 개수
+    num_signal_levels = 5
+
+    # 무작위 신호 레벨 생성
+    random_signal_levels = np.random.uniform(min_signal_level, max_signal_level, num_signal_levels)
+    print("Random signal levels (dBm):", random_signal_levels)
+    return random_signal_levels

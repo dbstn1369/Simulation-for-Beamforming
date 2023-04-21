@@ -35,30 +35,6 @@ def choose_action(state):
     action = torch.multinomial(action_probs + 1e-8, 1).item()  # Add a small constant value to action_probs
     return action
 
-# def update_actor_critic(state, action, reward, next_state):
-
-
-#     state_tensor = torch.FloatTensor(state).unsqueeze(0)
-#     next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
-#     action_tensor = torch.LongTensor([action])
-
-#     value = critic(state_tensor)
-#     next_value = critic(next_state_tensor).detach()
-#     target_value = reward + discount_factor * next_value
-
-#     critic_loss = nn.MSELoss()(value, target_value)
-#     critic_optimizer.zero_grad()
-#     critic_loss.backward()
-#     critic_optimizer.step()
-
-#     action_prob = actor(state_tensor)
-#     selected_action_prob = action_prob.gather(1, action_tensor.unsqueeze(1)).squeeze()
-#     advantage = (target_value - value).detach()
-
-#     actor_loss = -torch.log(selected_action_prob) * advantage
-#     actor_optimizer.zero_grad()
-#     actor_loss.backward()
-#     actor_optimizer.step()
 
 def update_actor_critic_batch(batch):
     states, actions, rewards, next_states = zip(*batch)
@@ -105,7 +81,7 @@ def get_reward(AP, successful_ssw_count, STS, prev_STS):
 
 def get_new_state(AP, STS):
 
-    sts_count, Cog, delta_u_norm = calculate_state_variables(AP.STS, AP.BI, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+    sts_count, Cog, delta_u_norm = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
 
     return [sts_count, Cog, delta_u_norm]
 
@@ -113,7 +89,7 @@ def get_new_state(AP, STS):
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 prev_STS = 0
-for episode in range(100):
+for episode in range(1):
     connected_stations = []
     total_time = 0
     total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
