@@ -1,4 +1,4 @@
-import random
+
 import time
 import numpy as np
 import torch
@@ -8,8 +8,8 @@ from ac_models import Actor, Critic, MemoryBuffer
 from network_elements import AccessPoint, calculate_state_variables
 
 
-STS = 5
-AP = AccessPoint(num_stations=3, STS=STS)
+STS = 32
+AP = AccessPoint(num_stations=100, STS=STS)
 
 num_states = 3
 num_actions = 3
@@ -18,13 +18,12 @@ critic_lr = 0.001
 discount_factor = 0.99
 
 
-
 actor = Actor(num_states, num_actions)
 critic = Critic(num_states)
 actor_optimizer = optim.Adam(actor.parameters(), lr=actor_lr)
 critic_optimizer = optim.Adam(critic.parameters(), lr=critic_lr)
 
-memory_buffer_capacity = 10000
+memory_buffer_capacity = 1000
 batch_size = 32
 memory_buffer = MemoryBuffer(memory_buffer_capacity)
 
@@ -33,10 +32,11 @@ def choose_action(state):
     state_tensor = torch.FloatTensor(state).unsqueeze(0)
     with torch.no_grad():
         action_probs = actor(state_tensor)
-    print(f"Action probabilities: {action_probs}")  # Add this line to check action probabilities
-    action = torch.multinomial(action_probs + 1e-8, 1).item()  # Add a small constant value to action_probs
+    action_probs = action_probs.squeeze().numpy()  # Flatten action_probs to 1D numpy array
+    action_probs = np.nan_to_num(action_probs, nan=1/len(action_probs))  # Replace NaN values with a small value
+    action_probs /= action_probs.sum()  # Normalize the probabilities
+    action = np.random.choice(len(action_probs), p=action_probs)
     return action
-
 
 def update_actor_critic_batch(batch):
     states, actions, rewards, next_states = zip(*batch)
@@ -91,18 +91,19 @@ def get_new_state(AP, STS):
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 prev_STS = 0
-for episode in range(1):
+for episode in range(1000):
     connected_stations = []
     total_time = 0
     total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
     start_time = time.time()
     s_time = time.time()
+
+    AP.reset_all_stations()
     AP.start_beamforming_training()
 
 
     while not AP.all_stations_paired():
 
-        sinr_values = []
         connected_stations = [station for station in AP.stations if station.pair]
         state = get_new_state(AP, STS)
         total_STS_used += STS  # 누적 STS 값 업데이트
@@ -114,11 +115,9 @@ for episode in range(1):
             STS = max(1, STS - 1)
 
         successful_ssw_count = 0
-        sinr_values = []
+    
         for i in range(AP.num_sector):
-            sinr_values_sector, successful_ssw_count_sector = AP.recieve(i+1)
-            if sinr_values_sector:  # Check if the list is not empty
-                sinr_values.extend(sinr_values_sector)
+            successful_ssw_count_sector = AP.receive(i+1)
             successful_ssw_count += successful_ssw_count_sector
 
         AP.broadcast_ack()
@@ -129,6 +128,7 @@ for episode in range(1):
             f_time = time.time()  # 시간을 할당하는 부분 추가
             time_difference = f_time - s_time
             s_time += time_difference
+            total_time += time_difference
             reward = get_reward(AP,successful_ssw_count, STS, prev_STS)  # Pass the prev_STS variable
             next_state = get_new_state(AP, STS)
             memory_buffer.push(state, action, reward, next_state)
@@ -137,15 +137,27 @@ for episode in range(1):
             if len(memory_buffer) >= batch_size:
                 batch = memory_buffer.sample(batch_size)
                 update_actor_critic_batch(batch)
-
+            
+            print(f"Current_STS_: {STS-1}")
+            print(f"Total_STS_used: {total_STS_used}")
+            print(f"Episode: {episode}")
             AP.next_bi()
 
     end_time = time.time()  # 시뮬레이션 종료 시간 측정
-    total_time = end_time - start_time
+    total_time = end_time - start_time    
+
+    with open('total_time.txt', 'a') as f:
+        f.write(f"{total_time:.3f}\n")  # 누적된 STS 값을 함께 저장
+    with open('total_STS.txt', 'a') as f:
+        f.write(f"{total_STS_used}\n")  # 누적된 STS 값을 함께 저장
+
     print("EPISODE: " + str(episode) + " All stations are paired. Simulation complete.")
     print(f"Total simulation time: {total_time:.3f} seconds")
-    # 결과를 파일에 저장
-    with open('beamforming_simulation_results_with_AC.txt', 'a') as f:
-        f.write(f"{total_time:.3f}, {total_STS_used}\n")  # 누적된 STS 값을 함께 저장
+    # Reset all station pairs before starting the next episode
+
+    total_STS_used = 0
+
+
+
 
 

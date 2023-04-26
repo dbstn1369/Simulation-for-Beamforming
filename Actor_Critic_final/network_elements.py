@@ -2,8 +2,7 @@ import random
 import numpy as np
 import random
 import numpy as np
-import torch
-import torch.nn as nn
+
 
 
 
@@ -11,8 +10,9 @@ class AccessPoint:
     def __init__(self, num_stations, STS, min_distance=10, max_distance=100):
         self.num_stations = num_stations
         self.STS = STS
-        self.num_sector = 6
+        self.num_sector = 4
         self.ssw_list = []
+        self.previous_u = 0
         self.min_distance = min_distance
         self.max_distance = max_distance
         station_positions = np.linspace(self.min_distance, self.max_distance, num_stations)
@@ -20,41 +20,53 @@ class AccessPoint:
         self.BI = self.stations[random.randint(0, num_stations-1)]
         self.set_random_position()
 
+
+    def reset_all_stations(self):
+        for station in self.stations:
+            station.reset_station()
+
+
     def set_random_position(self):
         for station in self.stations:
             station.position = np.random.uniform(self.min_distance, self.max_distance)
 
-    def start_beamforming_training(self):
-        self.sinr_values = []
 
+    def start_beamforming_training(self):
+    
         beacon_frame = self.create_beacon_frame_with_trn_r()
-        for station in self.stations:
+        unconnected_stations = [station for station in self.stations if not station.pair]
+        
+        for station in unconnected_stations:
             station.receive_bti(beacon_frame)
             station.receive_trn_r(beacon_frame)
+            station.backoff_count = random.randint(1, self.STS)  # backoff_count 재설정            
 
     def create_beacon_frame_with_trn_r(self):
         return {'SNR': SNR(), 'trn_r': 'TRN-R data'}
 
-    def recieve(self, sector):
+
+
+    
+    def receive(self, sector):
         successful_ssw_count = 0
         received_signals = []
-        if sector >= len(self.sinr_values):
-            return [], successful_ssw_count
+        sts_counter = [0] * self.STS  # STS별로 사용한 횟수를 저장할 리스트 생성
+
         for i in range(self.STS):
             for station in self.stations:
                 if not station.pair and sector == station.tx_sector_AP:
                     signal = station.send_ssw(i, sector)
                     if signal is not None:
                         received_signals.append(signal)
+                        sts_counter[i] += 1  # 해당 STS에 대한 카운터를 증가시킵니다.
                     if station.data_success:
                         successful_ssw_count += 1
-            if len(received_signals) > 1:
-                sinr_values = [SINR(signal, [s for s in received_signals if s != signal]) for signal in received_signals]
-                self.sinr_values[sector].extend(sinr_values)
-        if not self.sinr_values[sector]:
-            return [], successful_ssw_count
-        else:
-            return self.sinr_values[sector], successful_ssw_count
+
+        # 충돌 처리: 한 STS에서 두 개 이상의 신호가 수신되면 충돌로 간주하고 성공적인 SSW 개수를 줄입니다.
+        collisions = sum([1 for count in sts_counter if count > 1])
+        successful_ssw_count -= collisions
+
+        return successful_ssw_count
 
     def broadcast_ack(self):
         ack_frame = "ACK_DATA"
@@ -62,15 +74,23 @@ class AccessPoint:
             if station.pair == False:
                 station.receive_ack_frame(ack_frame)
 
+
+
     def next_bi(self):
         self.start_beamforming_training()
         for i in range(self.num_sector):
-            successful_ssw_count, sinr_values = self.recieve(i)  # sinr_values 반환값 추가
-        self.broadcast_ack()
+            successful_ssw_count = self.receive(i)
+        self.broadcast_ack()    
+
+  
 
     def all_stations_paired(self):
-        return all(station.pair for station in self.stations)
-
+        unpaired_stations = [station for station in self.stations if not station.pair]
+        if unpaired_stations:
+            print(f"Unpaired stations: {[station.id for station in unpaired_stations]}")
+            return False
+        else:
+            return True
 
 class Station:
     def __init__(self, id, STS, position=None, AP=None):
@@ -80,9 +100,16 @@ class Station:
         self.rx_sector = None
         self.collisions = 0
         self.data_success = False
-        self.sectors = [i for i in range(1, 3)]
+        self.sectors = [i for i in range(1, 4)]
         self.backoff_count = random.randint(1, STS)
         self.AP = AP
+
+    def reset_station(self):
+        self.pair = False
+        self.tx_sector_AP = None
+        self.rx_sector = None
+        self.data_success = False
+        self.backoff_count = random.randint(1, self.AP.STS)
 
 
     def receive_bti(self, beacon_frame):
@@ -104,6 +131,7 @@ class Station:
         best_rx_sector = np.argmax(snr_values) % len(self.sectors) + 1
         return best_rx_sector
 
+    
     def send_ssw(self, STS, sector):
         if not self.pair and STS == self.backoff_count:  # 이미 연결된 STA들이 참여하지 않도록 조건 추가
             self.rx_sector = None
@@ -155,17 +183,19 @@ def calculate_state_variables(STS, s_sts, AP):
     # Calculate STS usage
     N_ack = sum([1 for station in AP.stations if station.data_success])
     U_current = N_ack / STS
-    U_previous = s_sts
+    U_previous = AP.previous_u
     delta_U = U_current - U_previous
-    delta_U_min = 0
-    delta_U_max = 32
+    delta_U_min = -1
+    delta_U_max = 1
     delta_U_norm = (delta_U - delta_U_min) / (delta_U_max - delta_U_min)
+
+    AP.previous_u = U_current 
 
     return s_sts, C_k, delta_U_norm
 
-def SINR(received_signal, interfering_signals, noise_power=1e-9):
-    interference = sum(interfering_signals)
-    return received_signal / (interference + noise_power)
+# def SINR(received_signal, interfering_signals, noise_power=1e-9):
+#     interference = sum(interfering_signals)
+#     return received_signal / (interference + noise_power)
 
 def SNR():
     # 신호 레벨 범위 (dBm 단위)
