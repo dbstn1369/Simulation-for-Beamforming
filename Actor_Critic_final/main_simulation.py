@@ -6,9 +6,10 @@ import torch.nn as nn
 import torch.optim as optim
 from ac_models import Actor, Critic, MemoryBuffer
 from network_elements import AccessPoint, calculate_state_variables
+import math
 
 
-STS = 16
+STS = 15
 AP = AccessPoint(num_stations=300, STS=STS)
 
 num_states = 3
@@ -65,13 +66,14 @@ def update_actor_critic_batch(batch):
     actor_loss.backward()
     actor_optimizer.step()
     
-def get_reward(AP, successful_ssw_count, STS):
-    c1, c2 = 0.2, 0.8  # c1, c2는 각각 0.5로 설정
-    U = successful_ssw_count / STS*AP.num_sector #변경이 필요함
+def get_reward(AP, successful_ssw_count, STS, training_time):
+    c1, c2, c3 = 0.2, 0.8, 0.1  
+    U = successful_ssw_count / (STS*AP.num_sector) #변경이 필요함
 
     STS, C_k, delta_u_norm = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
 
-    reward = (c1 * U + c2 * delta_u_norm) / (1 + C_k) #reward value too high
+    #reward = (c1 * U + c2 * delta_u_norm) / (1 + C_k) #reward value too high
+    reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm) / (1 + C_k) - c3 * training_time)))
     print(f"reward: {reward}")
     
     return reward
@@ -125,7 +127,7 @@ for episode in range(2000):
             time_difference = f_time - s_time
             s_time += time_difference
             total_time += time_difference
-            reward = get_reward(AP,successful_ssw_count, STS)  # Pass the prev_STS variable
+            reward = get_reward(AP,successful_ssw_count, STS, time_difference)  # Pass the prev_STS variable
             next_state = get_new_state(AP, STS)
             memory_buffer.push(state, action, reward, next_state)
            
