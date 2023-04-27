@@ -111,8 +111,6 @@ for episode in range(2000):
             STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
         elif action == 1:
             STS = max(1, STS - 1)
-
-        successful_ssw_count = 0
     
         for i in range(AP.num_sector):
             successful_ssw_count_sector = AP.receive(i+1)

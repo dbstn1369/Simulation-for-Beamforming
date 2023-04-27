@@ -43,8 +43,29 @@ class AccessPoint:
         return {'SNR': SNR(), 'trn_r': 'TRN-R data'}
 
 
+    # def receive(self, sector):
+    #     successful_ssw_count = 0
+    #     received_signals = []
+    #     sts_counter = [0] * self.STS  # STS별로 사용한 횟수를 저장할 리스트 생성
+
+    #     for i in range(self.STS):
+    #         for station in self.stations:
+    #             if not station.pair and sector == station.tx_sector_AP:
+    #                 signal = station.send_ssw(i, sector)
+    #                 if signal is not None:
+    #                     received_signals.append(signal)
+    #                     self.ssw_list.append(signal)
+    #                     sts_counter[i] += 1  # 해당 STS에 대한 카운터를 증가시킵니다.
+    #                 if station.data_success:
+    #                     successful_ssw_count += 1
+
+    #     # 충돌 처리: 한 STS에서 두 개 이상의 신호가 수신되면 충돌로 간주하고 성공적인 SSW 개수를 줄입니다.
+    #     collisions = sum([1 for count in sts_counter if count > 1])
+    #     successful_ssw_count -= collisions
+
+    #     return successful_ssw_count
+    
     def receive(self, sector):
-        successful_ssw_count = 0
         received_signals = []
         sts_counter = [0] * self.STS  # STS별로 사용한 횟수를 저장할 리스트 생성
 
@@ -53,16 +74,18 @@ class AccessPoint:
                 if not station.pair and sector == station.tx_sector_AP:
                     signal = station.send_ssw(i, sector)
                     if signal is not None:
-                        received_signals.append(signal)
-                        self.ssw_list.append(signal)
+                        received_signals.append((i, signal))
                         sts_counter[i] += 1  # 해당 STS에 대한 카운터를 증가시킵니다.
-                    if station.data_success:
-                        successful_ssw_count += 1
 
         # 충돌 처리: 한 STS에서 두 개 이상의 신호가 수신되면 충돌로 간주하고 성공적인 SSW 개수를 줄입니다.
-        collisions = sum([1 for count in sts_counter if count > 1])
-        successful_ssw_count -= collisions
+        collisions = [count > 1 for count in sts_counter]
 
+        # 충돌이 발생하지 않은 경우만 ssw_list에 추가합니다.
+        for sts, signal in received_signals:
+            if not collisions[sts]:
+                self.ssw_list.append(signal)
+
+        successful_ssw_count = len(self.ssw_list)
         return successful_ssw_count
 
     def broadcast_ack(self):
