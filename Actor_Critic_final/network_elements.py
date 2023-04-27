@@ -4,8 +4,6 @@ import random
 import numpy as np
 
 
-
-
 class AccessPoint:
     def __init__(self, num_stations, STS, min_distance=10, max_distance=100):
         self.num_stations = num_stations
@@ -45,8 +43,6 @@ class AccessPoint:
         return {'SNR': SNR(), 'trn_r': 'TRN-R data'}
 
 
-
-    
     def receive(self, sector):
         successful_ssw_count = 0
         received_signals = []
@@ -58,6 +54,7 @@ class AccessPoint:
                     signal = station.send_ssw(i, sector)
                     if signal is not None:
                         received_signals.append(signal)
+                        self.ssw_list.append(signal)
                         sts_counter[i] += 1  # 해당 STS에 대한 카운터를 증가시킵니다.
                     if station.data_success:
                         successful_ssw_count += 1
@@ -149,8 +146,11 @@ class Station:
             print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
 
 
+
+
 def calculate_state_variables(STS, s_sts, AP):
     C_k = 0
+    alpha = 0.5
     # Calculate current STS count
     if isinstance(STS, int):
         s_sts = STS
@@ -165,31 +165,38 @@ def calculate_state_variables(STS, s_sts, AP):
     min_propagation_delay = np.linalg.norm(AP.min_distance) / 3e8
     max_propagation_delay = np.linalg.norm(AP.max_distance) / 3e8
 
-    s_pd = np.mean(propagation_delay)
-    S_norm = (s_pd - min_propagation_delay) / (max_propagation_delay - min_propagation_delay)
-    W = 1 - S_norm
-    print(f"S_norm: ", S_norm)
-    # Calculate congestion
+    W = []
+    for pd in propagation_delay:
+        S_norm = (pd - min_propagation_delay) / (max_propagation_delay - min_propagation_delay)
+        W.append(1 - S_norm)
+
+     # Calculate congestion
     weighted_snr_sum = 0
     weight_sum = 0
-    for ssw in AP.ssw_list:
-        weighted_snr_sum += W * ssw.snr
-        weight_sum += W
+    for wi, ssw in zip(W, AP.ssw_list):
+        delay = np.linalg.norm(station.position - 0) / 3e8
+        S_norm = (delay - np.linalg.norm(AP.min_distance) / 3e8) / (np.linalg.norm(AP.max_distance - AP.min_distance) / 3e8)
+        weight = wi
+        weighted_snr_sum += weight * ssw
+        weight_sum += weight
     if weight_sum != 0:
-        s_c = weighted_snr_sum / weight_sum
-        C_norm = (s_c - np.mean([ssw.snr for ssw in AP.ssw_list])) / np.std([ssw.snr for ssw in AP.ssw_list])
-        C_k = 1 - C_norm
+        C = weighted_snr_sum / weight_sum
+        C_norm = (C - np.min(AP.ssw_list)) / (np.max(AP.ssw_list) - np.min(AP.ssw_list))
+        C_k = 1 / (1 + np.exp(-alpha * (1 - C_norm)))
+    else:
+        C_k = 0
 
+    print(f"C_k: {C_k}")
     # Calculate STS usage
     N_ack = sum([1 for station in AP.stations if station.data_success])
-    U_current = N_ack / STS
+    U_current = N_ack / STS * AP.num_sector
     U_previous = AP.previous_u
     delta_U = U_current - U_previous
     delta_U_min = -1
     delta_U_max = 1
     delta_U_norm = (delta_U - delta_U_min) / (delta_U_max - delta_U_min)
 
-    AP.previous_u = U_current 
+    AP.previous_u = U_current
 
     return s_sts, C_k, delta_U_norm
 

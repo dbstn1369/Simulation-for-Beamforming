@@ -8,8 +8,8 @@ from ac_models import Actor, Critic, MemoryBuffer
 from network_elements import AccessPoint, calculate_state_variables
 
 
-STS = 32
-AP = AccessPoint(num_stations=100, STS=STS)
+STS = 16
+AP = AccessPoint(num_stations=300, STS=STS)
 
 num_states = 3
 num_actions = 3
@@ -55,7 +55,7 @@ def update_actor_critic_batch(batch):
     critic_loss.backward()
     critic_optimizer.step()
 
-    action_probs = actor(states_tensor)
+    action_probs = actor(states_tensor).squeeze(1)
     selected_action_probs = action_probs.gather(1, actions_tensor.unsqueeze(1)).squeeze()
     advantages = (target_values - values).detach()
 
@@ -65,20 +65,15 @@ def update_actor_critic_batch(batch):
     actor_loss.backward()
     actor_optimizer.step()
     
-def get_reward(AP, successful_ssw_count, STS, prev_STS):
-    c1, c2 = 0.5, 0.5  # c1, c2는 각각 0.5로 설정
-    U = successful_ssw_count / STS
-    if prev_STS != 0:
-        delta_U_norm = (STS - prev_STS) / prev_STS
-    else:
-        delta_U_norm = 0
-    C = np.mean([ssw.snr for station in AP.stations for ssw in AP.ssw_list])  
-    if prev_STS != 0:  # Add this condition to handle the case when prev_STS is 0
-        C_norm = (C - np.mean([AP.ssw.snr for sts in AP.ssw_list])) / np.std([AP.ssw.snr for sts in AP.ssw_list])
-    else:
-        C_norm = 0  # Set C_norm to a default value when prev_STS is 0
-    C_k = 1 - C_norm
-    reward = (c1 * U + c2 * delta_U_norm) / (1 + C_k)
+def get_reward(AP, successful_ssw_count, STS):
+    c1, c2 = 0.2, 0.8  # c1, c2는 각각 0.5로 설정
+    U = successful_ssw_count / STS*AP.num_sector #변경이 필요함
+
+    STS, C_k, delta_u_norm = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+
+    reward = (c1 * U + c2 * delta_u_norm) / (1 + C_k) #reward value too high
+    print(f"reward: {reward}")
+    
     return reward
 
 def get_new_state(AP, STS):
@@ -91,9 +86,10 @@ def get_new_state(AP, STS):
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 prev_STS = 0
-for episode in range(1000):
+for episode in range(2000):
     connected_stations = []
     total_time = 0
+    successful_ssw_count = 0
     total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
     start_time = time.time()
     s_time = time.time()
@@ -106,7 +102,7 @@ for episode in range(1000):
 
         connected_stations = [station for station in AP.stations if station.pair]
         state = get_new_state(AP, STS)
-        total_STS_used += STS  # 누적 STS 값 업데이트
+        total_STS_used += STS*AP.num_sector  # 누적 STS 값 업데이트
 
         action = choose_action(state)
         if action == 0:
@@ -129,7 +125,7 @@ for episode in range(1000):
             time_difference = f_time - s_time
             s_time += time_difference
             total_time += time_difference
-            reward = get_reward(AP,successful_ssw_count, STS, prev_STS)  # Pass the prev_STS variable
+            reward = get_reward(AP,successful_ssw_count, STS)  # Pass the prev_STS variable
             next_state = get_new_state(AP, STS)
             memory_buffer.push(state, action, reward, next_state)
            
@@ -149,7 +145,7 @@ for episode in range(1000):
     with open('total_time.txt', 'a') as f:
         f.write(f"{total_time:.3f}\n")  # 누적된 STS 값을 함께 저장
     with open('total_STS.txt', 'a') as f:
-        f.write(f"{total_STS_used}\n")  # 누적된 STS 값을 함께 저장
+        f.write(str(total_STS_used)+"\n")  # 누적된 STS 값을 함께 저장
 
     print("EPISODE: " + str(episode) + " All stations are paired. Simulation complete.")
     print(f"Total simulation time: {total_time:.3f} seconds")
