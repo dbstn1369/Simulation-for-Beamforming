@@ -43,8 +43,31 @@ class AccessPoint:
         return {'SNR': SNR(), 'trn_r': 'TRN-R data'}
 
 
+    def receive(self, sector):
+        received_signals = []
+        sts_counter = [0] * self.STS
+
+        for i in range(self.STS):
+            for station in self.stations:
+                if not station.pair and sector == station.tx_sector_AP:
+                    signal, collision = station.send_ssw(i, sector)
+                    if signal is not None:
+                        received_signals.append((i, signal))
+                        sts_counter[i] += 1
+
+        collisions = [count > 1 for count in sts_counter]
+
+        for sts, signal in received_signals:
+            if not collisions[sts]:
+                self.ssw_list.append(signal)
+                print(f"Station {self.stations[sts].id} transmitted SSW frame successfully")
+            else:
+                print(f"Station {self.stations[sts].id} transmitted SSW frame, but it collided")
+
+        successful_ssw_count = len(self.ssw_list)
+        return successful_ssw_count
+    
     # def receive(self, sector):
-    #     successful_ssw_count = 0
     #     received_signals = []
     #     sts_counter = [0] * self.STS  # STS별로 사용한 횟수를 저장할 리스트 생성
 
@@ -53,47 +76,30 @@ class AccessPoint:
     #             if not station.pair and sector == station.tx_sector_AP:
     #                 signal = station.send_ssw(i, sector)
     #                 if signal is not None:
-    #                     received_signals.append(signal)
-    #                     self.ssw_list.append(signal)
+    #                     received_signals.append((i, signal))
     #                     sts_counter[i] += 1  # 해당 STS에 대한 카운터를 증가시킵니다.
-    #                 if station.data_success:
-    #                     successful_ssw_count += 1
 
     #     # 충돌 처리: 한 STS에서 두 개 이상의 신호가 수신되면 충돌로 간주하고 성공적인 SSW 개수를 줄입니다.
-    #     collisions = sum([1 for count in sts_counter if count > 1])
-    #     successful_ssw_count -= collisions
+    #     collisions = [count > 1 for count in sts_counter]
 
+    #     # 충돌이 발생하지 않은 경우만 ssw_list에 추가합니다.
+    #     for sts, signal in received_signals:
+    #         if not collisions[sts]:
+    #             self.ssw_list.append(signal)
+
+    #     successful_ssw_count = len(self.ssw_list)
     #     return successful_ssw_count
+
+    # def broadcast_ack(self):
+    #     ack_frame = "ACK_DATA"
+    #     for station in self.stations:
+    #         if station.pair == False:
+    #             station.receive_ack_frame(ack_frame)
     
-    def receive(self, sector):
-        received_signals = []
-        sts_counter = [0] * self.STS  # STS별로 사용한 횟수를 저장할 리스트 생성
-
-        for i in range(self.STS):
-            for station in self.stations:
-                if not station.pair and sector == station.tx_sector_AP:
-                    signal = station.send_ssw(i, sector)
-                    if signal is not None:
-                        received_signals.append((i, signal))
-                        sts_counter[i] += 1  # 해당 STS에 대한 카운터를 증가시킵니다.
-
-        # 충돌 처리: 한 STS에서 두 개 이상의 신호가 수신되면 충돌로 간주하고 성공적인 SSW 개수를 줄입니다.
-        collisions = [count > 1 for count in sts_counter]
-
-        # 충돌이 발생하지 않은 경우만 ssw_list에 추가합니다.
-        for sts, signal in received_signals:
-            if not collisions[sts]:
-                self.ssw_list.append(signal)
-
-        successful_ssw_count = len(self.ssw_list)
-        return successful_ssw_count
-
     def broadcast_ack(self):
-        ack_frame = "ACK_DATA"
-        for station in self.stations:
-            if station.pair == False:
-                station.receive_ack_frame(ack_frame)
-
+        for signal, station_id in self.ssw_list:
+            ack_frame = f"ACK_DATA_{station_id}"
+            self.stations[station_id].receive_ack_frame(ack_frame)
 
 
     def next_bi(self):
@@ -152,23 +158,37 @@ class Station:
         return best_rx_sector
 
     
+    # def send_ssw(self, STS, sector):
+    #     if not self.pair and STS == self.backoff_count:  # 이미 연결된 STA들이 참여하지 않도록 조건 추가
+    #         self.rx_sector = None
+    #         self.data_success = True
+    #         print("Station " + str(self.id) + " transmitted SSW frame successfully")
+    #         return random.uniform(0.0001, 0.001)  # 임의의 수신 신호 전송
+    #     return None
+
     def send_ssw(self, STS, sector):
-        if not self.pair and STS == self.backoff_count:  # 이미 연결된 STA들이 참여하지 않도록 조건 추가
+        if not self.pair and STS == self.backoff_count:
             self.rx_sector = None
             self.data_success = True
-            print("Station " + str(self.id) + " transmitted SSW frame successfully")
-            return random.uniform(0.0001, 0.001)  # 임의의 수신 신호 전송
-        return None
+            return (random.uniform(0.0001, 0.001), False)  # 임의의 수신 신호 전송 및 충돌 여부(False)
+        return (None, None)
+
+    # def receive_ack_frame(self, ack_frame):
+    #     if self.pair == False:
+    #         if self.data_success == True:
+    #             self.pair = True
+    #             print("Station " + str(self.id) + " received ACK successfully")
+    #     else:
+    #         print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
 
     def receive_ack_frame(self, ack_frame):
+        expected_ack_frame = f"ACK_DATA_{self.id}"
         if self.pair == False:
-            if self.data_success == True:
+            if self.data_success == True and ack_frame == expected_ack_frame:
                 self.pair = True
-                print("Station " + str(self.id) + " received ACK successfully")
+                print(f"Station {self.id} received ACK successfully")
         else:
-            print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
-
-
+            print(f"Station {self.id} did not receive ACK, will retry in the next BI")
 
 
 def calculate_state_variables(STS, s_sts, AP):
