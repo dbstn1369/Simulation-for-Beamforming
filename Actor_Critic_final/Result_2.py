@@ -9,7 +9,7 @@ total_sts = np.genfromtxt('total_STS.txt')
 episode_numbers = np.arange(1, len(total_times) + 1)
 
 # 50개씩 묶어 평균을 구함
-bin_size = 50
+bin_size = 100
 total_times_avg = np.mean(total_times.reshape(-1, bin_size), axis=1)
 total_sts_avg = np.mean(total_sts.reshape(-1, bin_size), axis=1)
 episode_numbers_avg = np.arange(1, len(total_times_avg) + 1) * bin_size
@@ -22,7 +22,7 @@ fig, ax1 = plt.subplots()
 
 # Plot the time data on the first y-axis
 ax1.plot(episode_numbers_avg, total_times_avg, label='Time', color='b')
-ax1.set_xlabel('Episode Number (averaged over 50 episodes)', fontsize=12)
+ax1.set_xlabel('Episode Number (averaged over 20 episodes)', fontsize=12)
 ax1.set_ylabel('Time (ms)', fontsize=12)
 
 # Set the grid
@@ -47,7 +47,7 @@ lines2, labels2 = ax2.get_legend_handles_labels()
 ax1.legend(lines1 + lines2, labels1 + labels2, fontsize=10)
 
 # Set the title
-plt.title('Time and STS Count per Episode (averaged over 50 episodes)', fontsize=14)
+plt.title('Time and STS Count per Episode (averaged over 20 episodes)', fontsize=14)
 
 # Save the plot as a high-quality image
 fig.savefig('time_and_sts_count_per_episode_averaged.png', dpi=300)
