@@ -10,7 +10,7 @@ import math
 
 
 STS = 15
-AP = AccessPoint(num_stations=100, STS=STS)
+AP = AccessPoint(num_stations=50, STS=STS)
 
 num_states = 3
 num_actions = 3
@@ -124,6 +124,9 @@ for episode in range(1000):
             
             f_time = time.time()  # 시간을 할당하는 부분 추가
             time_difference = f_time - s_time
+            
+            total_time += time_difference # 수정필요
+            print(f"Time spent in this BI: {time_difference:.3f} seconds")  # Add this line to print the time for each BI
             reward = get_reward(AP,successful_ssw_count, STS, time_difference)  # Pass the prev_STS variable
             next_state = get_new_state(AP, STS)
             memory_buffer.push(state, action, reward, next_state)
@@ -140,10 +143,6 @@ for episode in range(1000):
             print(f"Total_STS_used: {total_STS_used}")
             print(f"Episode: {episode}")
             AP.next_bi()
-
-
-    end_time = time.time()  # 시뮬레이션 종료 시간 측정
-    total_time = end_time - start_time    
 
     with open('total_time.txt', 'a') as f:
         f.write(f"{total_time:.3f}\n")  # 누적된 STS 값을 함께 저장
