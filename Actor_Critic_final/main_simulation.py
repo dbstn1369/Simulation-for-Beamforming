@@ -9,13 +9,13 @@ from network_elements import AccessPoint, calculate_state_variables
 import math
 
 
-STS = 15
+STS = 10
 AP = AccessPoint(num_stations=50, STS=STS)
 
 num_states = 3
 num_actions = 3
-actor_lr = 0.001
-critic_lr = 0.001
+actor_lr = 0.01
+critic_lr = 0.01
 discount_factor = 0.99
 
 
@@ -67,12 +67,12 @@ def update_actor_critic_batch(batch):
     actor_optimizer.step()
     
 def get_reward(AP, successful_ssw_count, STS, training_time):
-    
+    c1, c2, c3, c4 = 0.5, 0.5, 0.7, 0.7
     U = successful_ssw_count / (STS*AP.num_sector) 
 
     STS, C_k, delta_u_norm = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
 
-    reward = 1 / (1 + math.exp(-((U + delta_u_norm) / (C_k + training_time))))
+    reward = 1 / (1 + math.exp(-((c1*U + c2*delta_u_norm) / (c3*C_k + c4*training_time))))
     print(f"reward: {reward}")
     
     return reward
@@ -141,13 +141,13 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                     update_actor_critic_batch(batch)
                 
                 print(f"Current_STS_: {STS-1}")
-                print(f"Total_STS_used: {total_STS_used}")
-                print(f"Episode: {episode}")
                 AP.next_bi()
 
         end_time = time.time()
         total_time = end_time - start_time
-
+        print(f"Episode: {episode}")
+        print(f"Total_STS_used: {total_STS_used}")
+            
         time_file.write(f"{total_time:.3f}\n")
         sts_file.write(str(total_STS_used) + "\n")
 

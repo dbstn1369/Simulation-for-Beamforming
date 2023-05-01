@@ -9,12 +9,14 @@ class AccessPoint:
         self.num_stations = num_stations
         self.STS = STS
         self.num_sector = 6
+
         self.ssw_list = []
         self.previous_u = 0
-        self.min_distance = min_distance
-        self.max_distance = max_distance
         self.collisions = 0
         self.successful_ssw_count = 0
+
+        self.min_distance = min_distance
+        self.max_distance = max_distance
         station_positions = np.linspace(self.min_distance, self.max_distance, num_stations)
         self.stations = [Station(i, STS, position=station_positions[i], AP=self) for i in range(self.num_stations)]
         self.BI = self.stations[random.randint(0, num_stations-1)]
@@ -22,6 +24,11 @@ class AccessPoint:
 
 
     def reset_all_stations(self):
+        self.ssw_list = []
+        self.previous_u = 0
+        self.collisions = 0
+        self.successful_ssw_count = 0
+
         for station in self.stations:
             station.reset_station()
 
@@ -82,7 +89,7 @@ class AccessPoint:
     def next_bi(self):
         self.start_beamforming_training()
         for i in range(self.num_sector):
-            successful_ssw_count = self.receive(i)
+            self.successful_ssw_count = self.receive(i)
         self.broadcast_ack()
           
   
@@ -102,14 +109,15 @@ class AccessPoint:
 class Station:
     def __init__(self, id, STS, position=None, AP=None):
         self.id = id
+        self.sectors = [i for i in range(0, 3)]
+        self.position = position
+        self.AP = AP
+
         self.pair = False
         self.tx_sector_AP = None
         self.rx_sector = None
-        self.collisions = 0
         self.data_success = False
-        self.sectors = [i for i in range(0, 3)]
         self.backoff_count = random.randint(0, STS-1)
-        self.AP = AP
         self.attempts = 0
 
     def reset_station(self):
@@ -118,7 +126,7 @@ class Station:
         self.rx_sector = None
         self.data_success = False
         self.backoff_count = random.randint(0, self.AP.STS-1)
-
+        self.attempts = 0
 
     def receive_bti(self, beacon_frame):
         self.tx_sector_AP = self.get_best_sectors(beacon_frame)
