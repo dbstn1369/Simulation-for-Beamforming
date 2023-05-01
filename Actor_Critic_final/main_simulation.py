@@ -9,7 +9,7 @@ from network_elements import AccessPoint, calculate_state_variables
 import math
 
 
-STS = 10
+STS = 15
 AP = AccessPoint(num_stations=50, STS=STS)
 
 num_states = 3
@@ -87,7 +87,7 @@ def get_new_state(AP, STS):
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file:
-    for episode in range(300):
+    for episode in range(1500):
         connected_stations = []
         total_time = 0
         training_time = 0
@@ -107,10 +107,10 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             
 
             action = choose_action(state)
-            if action == 0:
+            if action == 1:
                 STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
                 print("STS: "+ str(STS))
-            elif action == 1:
+            elif action == 0:
                 STS = max(1, STS - 1)
                 print("STS: "+ str(STS))
         
