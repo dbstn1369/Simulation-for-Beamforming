@@ -67,12 +67,12 @@ def update_actor_critic_batch(batch):
     actor_optimizer.step()
     
 def get_reward(AP, successful_ssw_count, STS, training_time):
-    c1, c2, c3, c4 = 0.1, 0.1, 0.7, 0.1  
+    
     U = successful_ssw_count / (STS*AP.num_sector) 
 
     STS, C_k, delta_u_norm = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
 
-    reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm) / c3*(C_k) - c4 * training_time)))
+    reward = 1 / (1 + math.exp(-((U + delta_u_norm) / (C_k + training_time))))
     print(f"reward: {reward}")
     
     return reward
@@ -86,72 +86,71 @@ def get_new_state(AP, STS):
 
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
-for episode in range(1000):
-    connected_stations = []
-    total_time = 0
-    successful_ssw_count = 0
-    total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
-    start_time = time.time()
-    s_time = time.time()
+with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file:
+    for episode in range(300):
+        connected_stations = []
+        total_time = 0
+        training_time = 0
+        successful_ssw_count = 0
+        total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
+        start_time = time.time()
+        s_time = start_time
 
-    AP.reset_all_stations()
-    AP.start_beamforming_training()
+        AP.reset_all_stations()
+        AP.start_beamforming_training()
 
 
-    while not AP.all_stations_paired():
+        while not AP.all_stations_paired():
 
-        connected_stations = [station for station in AP.stations if station.pair]
-        state = get_new_state(AP, STS)
+            connected_stations = [station for station in AP.stations if station.pair]
+            state = get_new_state(AP, STS)
+            
+
+            action = choose_action(state)
+            if action == 0:
+                STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
+                print("STS: "+ str(STS))
+            elif action == 1:
+                STS = max(1, STS - 1)
+                print("STS: "+ str(STS))
         
+            for i in range(AP.num_sector):
+                successful_ssw_count_sector = AP.receive(i)
+                successful_ssw_count += successful_ssw_count_sector
 
-        action = choose_action(state)
-        if action == 0:
-            STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
-            print("STS: "+ str(STS))
-        elif action == 1:
-            STS = max(1, STS - 1)
-            print("STS: "+ str(STS))
-    
-        for i in range(AP.num_sector):
-            successful_ssw_count_sector = AP.receive(i)
-            successful_ssw_count += successful_ssw_count_sector
+            AP.broadcast_ack()
 
-        AP.broadcast_ack()
-
-        if not AP.all_stations_paired():
-            print("Not all stations are paired. Starting next BI process.")
+            if not AP.all_stations_paired():
+                print("Not all stations are paired. Starting next BI process.")
+                
+                
+                f_time = time.time()  # 시간을 할당하는 부분 추가
+                time_difference = f_time - s_time
+                
+                print(f"Time spent in this BI: {time_difference:.3f} seconds")  # Add this line to print the time for each BI
+                reward = get_reward(AP,successful_ssw_count, STS, time_difference)  # Pass the prev_STS variable
+                next_state = get_new_state(AP, STS)
+                memory_buffer.push(state, action, reward, next_state)
+                successful_ssw_count = 0
+                total_STS_used += STS*AP.num_sector  # 누적 STS 값 업데이트
             
-            
-            f_time = time.time()  # 시간을 할당하는 부분 추가
-            time_difference = f_time - s_time
-            
-            total_time += time_difference # 수정필요
-            print(f"Time spent in this BI: {time_difference:.3f} seconds")  # Add this line to print the time for each BI
-            reward = get_reward(AP,successful_ssw_count, STS, time_difference)  # Pass the prev_STS variable
-            next_state = get_new_state(AP, STS)
-            memory_buffer.push(state, action, reward, next_state)
-            successful_ssw_count = 0
-            total_STS_used += STS*AP.num_sector  # 누적 STS 값 업데이트
-            total_time += time_difference
-            s_time = time.time()
+                s_time = time.time()
 
-            if len(memory_buffer) >= batch_size:
-                batch = memory_buffer.sample(batch_size)
-                update_actor_critic_batch(batch)
-            
-            print(f"Current_STS_: {STS-1}")
-            print(f"Total_STS_used: {total_STS_used}")
-            print(f"Episode: {episode}")
-            AP.next_bi()
+                if len(memory_buffer) >= batch_size:
+                    batch = memory_buffer.sample(batch_size)
+                    update_actor_critic_batch(batch)
+                
+                print(f"Current_STS_: {STS-1}")
+                print(f"Total_STS_used: {total_STS_used}")
+                print(f"Episode: {episode}")
+                AP.next_bi()
 
-    with open('total_time.txt', 'a') as f:
-        f.write(f"{total_time:.3f}\n")  # 누적된 STS 값을 함께 저장
-    with open('total_STS.txt', 'a') as f:
-        f.write(str(total_STS_used)+"\n")  # 누적된 STS 값을 함께 저장
+        end_time = time.time()
+        total_time = end_time - start_time
 
-    print("EPISODE: " + str(episode) + " All stations are paired. Simulation complete.")
-    print(f"Total simulation time: {total_time:.3f} seconds")
-    # Reset all station pairs before starting the next episode
+        time_file.write(f"{total_time:.3f}\n")
+        sts_file.write(str(total_STS_used) + "\n")
+
 
 
 
