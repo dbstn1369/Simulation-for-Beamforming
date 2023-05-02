@@ -7,7 +7,7 @@ episode_times = np.genfromtxt('total_time.txt')
 episode_numbers = np.arange(1, len(episode_times) + 1)
 
 
-bin_size = 50
+bin_size = 200
 episode_times_avg = np.mean(episode_times.reshape(-1, bin_size), axis=1)
 episode_numbers_avg = np.arange(1, len(episode_times_avg) + 1) * bin_size
 
@@ -21,9 +21,9 @@ fig, ax = plt.subplots()
 ax.plot(episode_numbers_avg, episode_times_avg)
 
 # Set the labels and title
-ax.set_xlabel('Episode Number (averaged over 50 episodes)', fontsize=12)
+ax.set_xlabel('Episode Number', fontsize=12)
 ax.set_ylabel('Time (ms)', fontsize=12)
-ax.set_title('Time per Episode (averaged over 50 episodes)', fontsize=14)
+ax.set_title('Time per Episode', fontsize=14)
 
 # Set the grid
 ax.grid(True)

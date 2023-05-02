@@ -2,6 +2,7 @@ import random
 import numpy as np
 import random
 import numpy as np
+import math
 
 
 class AccessPoint:
@@ -222,7 +223,7 @@ def calculate_state_variables(STS, s_sts, AP):
     print(f"C_k: {C_k}")
     # Calculate STS usage
     N_ack = sum([1 for station in AP.stations if station.data_success])
-    U_current = N_ack / STS * AP.num_sector
+    U_current = N_ack / (STS*AP.num_sector)
     U_previous = AP.previous_u
     delta_U = U_current - U_previous
 
@@ -239,7 +240,24 @@ def calculate_state_variables(STS, s_sts, AP):
 
     AP.previous_u = U_current
 
-    return s_sts, C_k, delta_U_norm
+
+       # Calculate energy consumption
+    P_rx = 10
+    T_rx = max_propagation_delay
+    P_idle = 1
+    T_idle = min_propagation_delay
+
+    N_rx = sum([1 for station in AP.stations if station.data_success])  # 수신된 STS 개수 계산
+    N_idle = (STS*AP.num_sector) - N_rx  # 대기 중인 STS 개수 계산
+
+    E_rx = P_rx * T_rx
+    E_idle = P_idle * T_idle
+    E_t = E_rx * N_rx + E_idle * N_idle
+
+    E = 1 / (1 + math.exp(-(E_t)))
+
+    return s_sts, C_k, delta_U_norm, E
+    #return s_sts, C_k, delta_U_norm
 
 # def SINR(received_signal, interfering_signals, noise_power=1e-9):
 #     interference = sum(interfering_signals)

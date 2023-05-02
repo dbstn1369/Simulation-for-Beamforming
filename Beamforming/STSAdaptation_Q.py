@@ -3,7 +3,7 @@ import numpy as np
 import time
 
 
-num_states = 11  # 연결된 STA 수 (0-10)
+num_states = 50  # 연결된 STA 수 (0-10)
 num_actions = 3  # 증가, 감소, 그대로 유지
 q_table = np.zeros((num_states, num_actions))
 
@@ -40,7 +40,7 @@ def SNR():
     print("Random signal levels (dBm):", random_signal_levels)
     return random_signal_levels
 
-STS = 32
+STS = 15
 
 
 class AccessPoint:
@@ -90,7 +90,7 @@ class Station:
         self.rx_sector = None
         self.collisions = 0
         self.data_success = False
-        self.sectors = [i for i in range(1, 5)]
+        self.sectors = [i for i in range(1, 4)]
         self.backoff_count = random.randint(1, STS)
 
     def receive_bti(self, beacon_frame):
@@ -128,7 +128,7 @@ class Station:
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 
-for episode in range(10):
+for episode in range(1000):
     AP = AccessPoint(num_stations=10)
     connected_stations = 0
     total_time = 0

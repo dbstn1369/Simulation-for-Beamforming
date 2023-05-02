@@ -30,7 +30,7 @@ batch_size = 32
 memory_buffer = MemoryBuffer(memory_buffer_capacity)
 
 
-# def choose_action(state): without epsilon-greedy
+# def choose_action(state): #without epsilon-greedy
 #     state_tensor = torch.FloatTensor(state).unsqueeze(0)
 #     with torch.no_grad():
 #         action_probs = actor(state_tensor)
@@ -40,7 +40,7 @@ memory_buffer = MemoryBuffer(memory_buffer_capacity)
 #     action = np.random.choice(len(action_probs), p=action_probs)
 #     return action
 
-def choose_action(state, epsilon=0.2):
+def choose_action(state, epsilon=0.1):
     state_tensor = torch.FloatTensor(state).unsqueeze(0)
     with torch.no_grad():
         action_probs = actor(state_tensor)
@@ -82,22 +82,39 @@ def update_actor_critic_batch(batch):
     actor_loss.backward()
     actor_optimizer.step()
     
+# def get_reward(AP, successful_ssw_count, STS, training_time): #withour Energy
+#     #c1, c2, c3, c4 = 0.4, 0.6, 0.5, 0.5
+#     U = successful_ssw_count / (STS*AP.num_sector) 
+
+#     STS, C_k, delta_u_norm = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+
+#     #reward = 1 / (1 + math.exp(-((c1*U + c2*delta_u_norm) / (c3*C_k + c4*training_time))))
+#     reward = 1 / (1 + math.exp(-((U + delta_u_norm) / (C_k + training_time))))
+#     reward = 2 * reward - 1
+
+#     print(f"reward: {reward}")
+    
+#     return reward
+
+
 def get_reward(AP, successful_ssw_count, STS, training_time):
-    c1, c2, c3, c4 = 0.4, 0.6, 0.5, 0.5
-    U = successful_ssw_count / (STS*AP.num_sector) 
+    #c1, c2, c3, c4, c5 = 0.3, 0.3, 0.3, 0.4, 0.5
+    U = successful_ssw_count / (STS * AP.num_sector) 
 
-    STS, C_k, delta_u_norm = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
-
-    reward = 1 / (1 + math.exp(-((c1*U + c2*delta_u_norm) / (c3*C_k + c4*training_time))))
+    STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+    
+    #reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) / (c4 * C_k + c5 * training_time))))
+    reward = 1 / (1 + math.exp(-((U + delta_u_norm + E) / (C_k + training_time))))
     reward = 2 * reward - 1
-
+    
     print(f"reward: {reward}")
     
     return reward
 
 def get_new_state(AP, STS):
 
-    sts_count, Cog, delta_u_norm = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+    #sts_count, Cog, delta_u_norm, E = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+    sts_count, Cog, delta_u_norm, E = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
 
     return [sts_count, Cog, delta_u_norm]
 
@@ -105,7 +122,7 @@ def get_new_state(AP, STS):
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file:
-    for episode in range(500):
+    for episode in range(1000):
         connected_stations = []
         total_time = 0
         training_time = 0
@@ -125,10 +142,10 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             
 
             action = choose_action(state)
-            if action == 0:
+            if action == 1:
                 STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
                 print("STS: "+ str(STS))
-            elif action == 1:
+            elif action == 0:
                 STS = max(1, STS - 1)
                 print("STS: "+ str(STS))
         
@@ -144,6 +161,7 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                 
                 f_time = time.time()  # 시간을 할당하는 부분 추가
                 time_difference = f_time - s_time
+                s_time += time_difference
                 
                 print(f"Time spent in this BI: {time_difference:.3f} seconds")  # Add this line to print the time for each BI
                 reward = get_reward(AP,successful_ssw_count, STS, time_difference)  # Pass the prev_STS variable
@@ -152,7 +170,7 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                 successful_ssw_count = 0
                 total_STS_used += STS*AP.num_sector  # 누적 STS 값 업데이트
             
-                s_time = time.time()
+           
 
                 if len(memory_buffer) >= batch_size:
                     batch = memory_buffer.sample(batch_size)

@@ -2,7 +2,7 @@ import random
 import numpy as np
 import time
 
-num_states = 6  # 연결된 STA 수 (0-5)
+num_states = 32  # 최대 연결 가능한 수
 num_actions = 3  # 증가, 감소, 그대로 유지
 q_table = np.zeros((num_states, num_actions))
 
@@ -52,7 +52,7 @@ def SNR():
     print("Random signal levels (dBm):", random_signal_levels)
     return random_signal_levels
 
-STS = 32
+STS = 15
 
 
 class AccessPoint:
@@ -117,7 +117,7 @@ class Station:
         self.rx_sector = None
         self.collisions = 0
         self.data_success = False
-        self.sectors = [i for i in range(1, 5)]
+        self.sectors = [i for i in range(1, 4)]
         self.backoff_count = random.randint(1, STS)
 
     def receive_bti(self, beacon_frame):
@@ -156,59 +156,60 @@ class Station:
             print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
+with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file:
+    for episode in range(10):
+        AP = AccessPoint(num_stations=20)
+        connected_stations = 0
+        total_time = 0
+        total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
+        start_time = time.time()
+        s_time = time.time()
+        AP.start_beamforming_training()
 
-for episode in range(20):
-    AP = AccessPoint(num_stations=5)
-    connected_stations = 0
-    total_time = 0
-    total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
-    start_time = time.time()
-    s_time = time.time()
-    AP.start_beamforming_training()
+        while not AP.all_stations_paired():
 
-    while not AP.all_stations_paired():
-
-        sinr_values = []
-        connected_stations = sum(station.pair for station in AP.stations)
-        state = get_new_state(connected_stations, sinr_values)
-        total_STS_used += STS  # 누적 STS 값 업데이트
-
-        action = choose_action(state)
-        if action == 0:
-            STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
-        elif action == 1:
-            STS = max(1, STS - 1)
-
-        successful_ssw_count = 0
-        sinr_values = []
-        for i in range(AP.num_sector):
-            sinr_values_sector, successful_ssw_count_sector = AP.recieve(i)
-            if sinr_values_sector:  # Check if the list is not empty
-                sinr_values.extend(sinr_values_sector)
-            successful_ssw_count += successful_ssw_count_sector
-
-        AP.broadcast_ack()
-
-        if not AP.all_stations_paired():
-            print("Not all stations are paired. Starting next BI process.")
-
-            f_time = time.time()  # 시간을 할당하는 부분 추가
-            time_difference = f_time - s_time
-            s_time += time_difference
-            reward = get_reward(successful_ssw_count, STS)
+            sinr_values = []
             connected_stations = sum(station.pair for station in AP.stations)
-            next_state = get_new_state(connected_stations, sinr_values)
+            state = get_new_state(connected_stations, sinr_values)
+            total_STS_used += STS  # 누적 STS 값 업데이트
 
-            update_q_table(state, action, reward, next_state)
+            action = choose_action(state)
+            if action == 0:
+                STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
+            elif action == 1:
+                STS = max(1, STS - 1)
 
-            AP.next_bi()
+            successful_ssw_count = 0
+            sinr_values = []
+            for i in range(AP.num_sector):
+                sinr_values_sector, successful_ssw_count_sector = AP.recieve(i)
+                if sinr_values_sector:  # Check if the list is not empty
+                    sinr_values.extend(sinr_values_sector)
+                successful_ssw_count += successful_ssw_count_sector
 
-    end_time = time.time()  # 시뮬레이션 종료 시간 측정
-    total_time = end_time - start_time
-    print("EPISODE: " + str(episode) + " All stations are paired. Simulation complete.")
-    print(f"Total simulation time: {total_time:.3f} seconds")
-    # 결과를 파일에 저장
-    with open('beamforming_simulation_results_with_kim.txt', 'a') as f:
-        f.write(f"{total_time:.3f}, {total_STS_used}\n")  # 누적된 STS 값을 함께 저장
+            AP.broadcast_ack()
 
-    exploration_rate = max(0.01, exploration_rate - exploration_rate_decay)
+            if not AP.all_stations_paired():
+                print("Not all stations are paired. Starting next BI process.")
+
+                f_time = time.time()  # 시간을 할당하는 부분 추가
+                time_difference = f_time - s_time
+                s_time += time_difference
+
+                reward = get_reward(successful_ssw_count, STS)
+                connected_stations = sum(station.pair for station in AP.stations)
+                next_state = get_new_state(connected_stations, sinr_values)
+
+                update_q_table(state, action, reward, next_state)
+
+                AP.next_bi()
+
+        end_time = time.time()  # 시뮬레이션 종료 시간 측정
+        total_time = end_time - start_time
+        print("EPISODE: " + str(episode) + " All stations are paired. Simulation complete.")
+        print(f"Total simulation time: {total_time:.3f} seconds")
+        # 결과를 파일에 저장
+        time_file.write(f"{total_time:.3f}\n")
+        sts_file.write(str(total_STS_used) + "\n")
+
+        exploration_rate = max(0.01, exploration_rate - exploration_rate_decay)
