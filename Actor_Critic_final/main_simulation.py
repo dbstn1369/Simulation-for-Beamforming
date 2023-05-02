@@ -7,6 +7,7 @@ import torch.optim as optim
 from ac_models import Actor, Critic, MemoryBuffer
 from network_elements import AccessPoint, calculate_state_variables
 import math
+import random
 
 
 STS = 15
@@ -14,9 +15,9 @@ AP = AccessPoint(num_stations=50, STS=STS)
 
 num_states = 3
 num_actions = 3
-actor_lr = 0.01
-critic_lr = 0.01
-discount_factor = 0.99
+actor_lr = 0.0001
+critic_lr = 0.0005
+discount_factor = 0.95
 
 
 actor = Actor(num_states, num_actions)
@@ -29,14 +30,29 @@ batch_size = 32
 memory_buffer = MemoryBuffer(memory_buffer_capacity)
 
 
-def choose_action(state):
+# def choose_action(state): without epsilon-greedy
+#     state_tensor = torch.FloatTensor(state).unsqueeze(0)
+#     with torch.no_grad():
+#         action_probs = actor(state_tensor)
+#     action_probs = action_probs.squeeze().numpy()  # Flatten action_probs to 1D numpy array
+#     action_probs = np.nan_to_num(action_probs, nan=1/len(action_probs))  # Replace NaN values with a small value
+#     action_probs /= action_probs.sum()  # Normalize the probabilities
+#     action = np.random.choice(len(action_probs), p=action_probs)
+#     return action
+
+def choose_action(state, epsilon=0.2):
     state_tensor = torch.FloatTensor(state).unsqueeze(0)
     with torch.no_grad():
         action_probs = actor(state_tensor)
     action_probs = action_probs.squeeze().numpy()  # Flatten action_probs to 1D numpy array
     action_probs = np.nan_to_num(action_probs, nan=1/len(action_probs))  # Replace NaN values with a small value
     action_probs /= action_probs.sum()  # Normalize the probabilities
-    action = np.random.choice(len(action_probs), p=action_probs)
+
+    if random.random() < epsilon:
+        action = random.choice(range(len(action_probs)))  # Choose a random action with probability epsilon
+    else:
+        action = np.argmax(action_probs)  # Choose the action with the highest probability
+
     return action
 
 def update_actor_critic_batch(batch):
@@ -67,12 +83,14 @@ def update_actor_critic_batch(batch):
     actor_optimizer.step()
     
 def get_reward(AP, successful_ssw_count, STS, training_time):
-    c1, c2, c3, c4 = 0.5, 0.5, 0.7, 0.7
+    c1, c2, c3, c4 = 0.4, 0.6, 0.5, 0.5
     U = successful_ssw_count / (STS*AP.num_sector) 
 
     STS, C_k, delta_u_norm = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
 
     reward = 1 / (1 + math.exp(-((c1*U + c2*delta_u_norm) / (c3*C_k + c4*training_time))))
+    reward = 2 * reward - 1
+
     print(f"reward: {reward}")
     
     return reward
@@ -87,7 +105,7 @@ def get_new_state(AP, STS):
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file:
-    for episode in range(1500):
+    for episode in range(500):
         connected_stations = []
         total_time = 0
         training_time = 0
@@ -107,10 +125,10 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             
 
             action = choose_action(state)
-            if action == 1:
+            if action == 0:
                 STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
                 print("STS: "+ str(STS))
-            elif action == 0:
+            elif action == 1:
                 STS = max(1, STS - 1)
                 print("STS: "+ str(STS))
         

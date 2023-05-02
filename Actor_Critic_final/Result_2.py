@@ -9,7 +9,7 @@ total_sts = np.genfromtxt('total_STS.txt')
 episode_numbers = np.arange(1, len(total_times) + 1)
 
 # 20개씩 묶어 평균을 구함
-bin_size = 100
+bin_size = 20
 total_times_avg = np.mean(total_times.reshape(-1, bin_size), axis=1)
 total_sts_avg = np.mean(total_sts.reshape(-1, bin_size), axis=1)
 episode_numbers_avg = np.arange(1, len(total_times_avg) + 1) * bin_size
