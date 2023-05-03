@@ -9,7 +9,7 @@ total_sts = np.genfromtxt('total_STS.txt')
 episode_numbers = np.arange(1, len(total_times) + 1)
 
 # 20개씩 묶어 평균을 구함
-bin_size = 200
+bin_size = 100
 total_times_avg = np.mean(total_times.reshape(-1, bin_size), axis=1)
 total_sts_avg = np.mean(total_sts.reshape(-1, bin_size), axis=1)
 episode_numbers_avg = np.arange(1, len(total_times_avg) + 1) * bin_size
@@ -21,7 +21,11 @@ plt.style.use('classic')
 fig, ax1 = plt.subplots()
 
 # Plot the time data on the first y-axis
-ax1.plot(episode_numbers_avg, total_times_avg, label='Time', color='b')
+#ax1.plot(episode_numbers_avg, total_times_avg, label='Time', color='b')
+# Plot the time data on the first y-axis with circles as markers
+ax1.plot(episode_numbers_avg, total_times_avg, label='Time', color='b', marker='s')
+
+
 ax1.set_xlabel('Episode Number', fontsize=12)
 ax1.set_ylabel('Time (ms)', fontsize=12)
 
@@ -35,7 +39,9 @@ ax1.tick_params(axis='both', which='major', labelsize=10)
 ax2 = ax1.twinx()
 
 # Plot the STS data on the second y-axis
-ax2.plot(episode_numbers_avg, total_sts_avg, label='STS Count', color='r')
+#ax2.plot(episode_numbers_avg, total_sts_avg, label='STS Count', color='r')
+# Plot the STS data on the second y-axis with triangles as markers
+ax2.plot(episode_numbers_avg, total_sts_avg, label='STS Count', color='r', marker='^')
 ax2.set_ylabel('STS Count', fontsize=12)
 
 # Customize the tick labels size

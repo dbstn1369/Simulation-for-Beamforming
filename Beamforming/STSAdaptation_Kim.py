@@ -52,6 +52,35 @@ def SNR():
     print("Random signal levels (dBm):", random_signal_levels)
     return random_signal_levels
 
+# # qd-realization 시나리오 출력을 파싱하는 함수를 추가
+# def parse_qd_realization_output(file_path):
+#     scenario_output = []
+#     with open(file_path, 'r') as file:
+#         for line in file:
+#             time, station_id, connected = map(int, line.strip().split(','))
+#             scenario_output.append((time, station_id, connected))
+#     return scenario_output
+
+# # 시나리오 출력을 사용하여 AccessPoint와 관련된 정보를 초기화하는 함수를 추가
+# def initialize_AP_from_scenario_output(AP, scenario_output):
+#     for time, station_id, connected in scenario_output:
+#         if time == 0:
+#             AP.stations[station_id].pair = bool(connected)
+#         else:
+#             break
+
+
+# # 시나리오 출력 파일 경로를 정의
+# scenario_file_path = 'qd-realization/output/file.txt'
+
+# # 시나리오 출력을 파싱
+# scenario_output = parse_qd_realization_output(scenario_file_path)
+
+# # AccessPoint를 시나리오 출력을 사용하여 초기화
+# initialize_AP_from_scenario_output(AP, scenario_output)
+
+
+
 STS = 15
 
 
@@ -156,7 +185,7 @@ class Station:
             print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
-with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file:
+with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as sts_file:
     for episode in range(10):
         AP = AccessPoint(num_stations=20)
         connected_stations = 0

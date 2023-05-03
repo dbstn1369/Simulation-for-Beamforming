@@ -269,7 +269,7 @@ def SNR():
     max_signal_level = -40
 
     # 무작위 신호 레벨 개수
-    num_signal_levels = 5
+    num_signal_levels = 6
 
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level, max_signal_level, num_signal_levels)
