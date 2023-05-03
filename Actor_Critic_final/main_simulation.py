@@ -40,7 +40,7 @@ memory_buffer = MemoryBuffer(memory_buffer_capacity)
 #     action = np.random.choice(len(action_probs), p=action_probs)
 #     return action
 
-def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_decay=500):
+def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_decay=300):
     epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
     state_tensor = torch.FloatTensor(state).unsqueeze(0)
     with torch.no_grad():
@@ -104,10 +104,9 @@ def get_reward(AP, successful_ssw_count, STS, training_time):
 
     STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
     
-    #reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) / (c4 * C_k + c5 * training_time))))
+    reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) - (c4 * C_k + c5 * training_time))))
     #reward = 1 / (1 + math.exp(-((U + delta_u_norm + E) / (C_k + training_time))))
-    reward = math.exp(c1 * U + c2 * delta_u_norm + c3 * E - c4 * C_k - c5 * training_time)-1
-    #reward = 2 * reward - 1
+    reward = 2 * reward - 1
     
     print(f"reward: {reward}")
     
@@ -127,7 +126,7 @@ def get_new_state(AP, STS):
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file:
-    for episode in range(500):
+    for episode in range(300):
         connected_stations = []
         total_time = 0
         training_time = 0
@@ -147,10 +146,10 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             
 
             action = choose_action(state, episode)
-            if action == 0:
+            if action == 1:
                 STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
                 print("STS: "+ str(STS))
-            elif action == 1:
+            elif action == 0:
                 STS = max(1, STS - 1)
                 print("STS: "+ str(STS))
         
