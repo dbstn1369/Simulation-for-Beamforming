@@ -99,14 +99,15 @@ def update_actor_critic_batch(batch):
 
 
 def get_reward(AP, successful_ssw_count, STS, training_time):
-    c1, c2, c3, c4, c5 = 0.5, 0.5, 1, 0.5, 0.5
+    c1, c2, c3, c4, c5 = 1, 1, 1, 1, 1
     U = successful_ssw_count / (STS * AP.num_sector) 
 
     STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
     
-    reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) / (c4 * C_k + c5 * training_time))))
+    #reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) / (c4 * C_k + c5 * training_time))))
     #reward = 1 / (1 + math.exp(-((U + delta_u_norm + E) / (C_k + training_time))))
-    reward = 2 * reward - 1
+    reward = math.exp(c1 * U + c2 * delta_u_norm + c3 * E - c4 * C_k - c5 * training_time)-1
+    #reward = 2 * reward - 1
     
     print(f"reward: {reward}")
     
@@ -146,10 +147,10 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             
 
             action = choose_action(state, episode)
-            if action == 1:
+            if action == 0:
                 STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
                 print("STS: "+ str(STS))
-            elif action == 0:
+            elif action == 1:
                 STS = max(1, STS - 1)
                 print("STS: "+ str(STS))
         
