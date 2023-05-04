@@ -11,7 +11,7 @@ import random
 
 
 STS = 32
-AP = AccessPoint(num_stations=100, STS=STS)
+AP = AccessPoint(num_stations=150, STS=STS)
 
 num_states = 3
 num_actions = 3
@@ -32,7 +32,7 @@ memory_buffer = MemoryBuffer(memory_buffer_capacity)
 
 
 
-def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_decay=100):
+def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_decay=1000):
 #def choose_action(state):
     epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
     #epsilon = 0.1
@@ -82,10 +82,11 @@ def update_actor_critic_batch(batch):
 def get_reward(AP, successful_ssw_count, STS, training_time):
     c1, c2, c3, c4, c5 = 1, 1, 1, 1, 1
     U = successful_ssw_count / (STS * AP.num_sector) 
+    T_m = 1 / (1+ math.exp(-(training_time)))
 
     STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
     
-    reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) - (c4 * C_k + c5 * training_time))))
+    reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) - (c4 * C_k + c5 * T_m))))
     
     #print(f"reward: {reward}")
     
@@ -104,7 +105,7 @@ def get_new_state(AP, STS):
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file, open('Reward.txt', 'a') as reward_file:
-    for episode in range(100):
+    for episode in range(1000):
         connected_stations = []
         total_time = 0
         training_time = 0
