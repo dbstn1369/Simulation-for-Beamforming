@@ -1,5 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+# Set the font family to a specific font, e.g., 'Arial'
+mpl.rcParams['font.family'] = 'Arial'
 
 # 텍스트 파일에서 데이터 읽기
 total_times_algo1 = np.genfromtxt('total_time.txt')

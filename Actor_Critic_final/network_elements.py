@@ -75,9 +75,7 @@ class AccessPoint:
                 print(f"Station {station.id} transmitted SSW frame successfully")    
             else:
                 print(f"Station {station.id} transmitted SSW frame, but it collided")
-
-        successful_ssw_count = len(self.ssw_list)
-        return successful_ssw_count
+        
     
 
     

@@ -1,5 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+# Set the font family to a specific font, e.g., 'Times New Roman'
+mpl.rcParams['font.family'] = 'Times New Roman'
 
 # 텍스트 파일에서 데이터 읽기
 total_times = np.genfromtxt('total_time.txt')
@@ -9,7 +13,7 @@ total_sts = np.genfromtxt('total_STS.txt')
 episode_numbers = np.arange(1, len(total_times) + 1)
 
 # 20개씩 묶어 평균을 구함
-bin_size = 100
+bin_size = 20
 total_times_avg = np.mean(total_times.reshape(-1, bin_size), axis=1)
 total_sts_avg = np.mean(total_sts.reshape(-1, bin_size), axis=1)
 episode_numbers_avg = np.arange(1, len(total_times_avg) + 1) * bin_size
@@ -26,7 +30,7 @@ fig, ax1 = plt.subplots()
 ax1.plot(episode_numbers_avg, total_times_avg, label='Time', color='b', marker='s')
 
 
-ax1.set_xlabel('Episode Number', fontsize=12)
+ax1.set_xlabel('Number of Episode', fontsize=12)
 ax1.set_ylabel('Time (ms)', fontsize=12)
 
 # Set the grid
@@ -41,8 +45,8 @@ ax2 = ax1.twinx()
 # Plot the STS data on the second y-axis
 #ax2.plot(episode_numbers_avg, total_sts_avg, label='STS Count', color='r')
 # Plot the STS data on the second y-axis with triangles as markers
-ax2.plot(episode_numbers_avg, total_sts_avg, label='STS Count', color='r', marker='^')
-ax2.set_ylabel('STS Count', fontsize=12)
+ax2.plot(episode_numbers_avg, total_sts_avg, label='Total STS', color='r', marker='^')
+ax2.set_ylabel('Total STS', fontsize=12)
 
 # Customize the tick labels size
 ax2.tick_params(axis='both', which='major', labelsize=10)
@@ -53,10 +57,10 @@ lines2, labels2 = ax2.get_legend_handles_labels()
 ax1.legend(lines1 + lines2, labels1 + labels2, fontsize=10)
 
 # Set the title
-plt.title('Time and STS Count per Episode', fontsize=14)
+plt.title('Time and Total STS per Episode', fontsize=14)
 
 # Save the plot as a high-quality image
-fig.savefig('time_and_sts_count_per_episode_averaged.png', dpi=300)
+fig.savefig('time_and_total_sts_per_episode_averaged.png', dpi=300)
 
 # Show the plot
 plt.show()
