@@ -126,7 +126,7 @@ def get_new_state(AP, STS):
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file:
-    for episode in range(300):
+    for episode in range(1000):
         connected_stations = []
         total_time = 0
         training_time = 0
