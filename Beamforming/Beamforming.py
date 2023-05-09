@@ -8,7 +8,7 @@ def SNR():
     max_signal_level = -40
 
     # 무작위 신호 레벨 개수
-    num_signal_levels = 5
+    num_signal_levels = 6
 
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level, max_signal_level, num_signal_levels)
@@ -36,8 +36,8 @@ class AccessPoint:
         print(f"sector{sector} of AP")
         for i in range(STS):
             for station in self.stations:
-                if sector == station.tx_sector_AP:
-                    print(f"STS: {i}")
+                if not station.pair and sector == station.tx_sector_AP:
+                    #print(f"STS: {i}")
                     station.send_ssw(i, sector)
 
     def broadcast_ack(self):
@@ -62,7 +62,7 @@ class Station:
         self.rx_sector = None
         self.collisions = 0
         self.data_success = False
-        self.sectors = [i for i in range(1, 5)]
+        self.sectors = [i for i in range(1, 4)]
         self.backoff_count = random.randint(1, STS)
 
     def receive_bti(self, beacon_frame):
@@ -99,32 +99,34 @@ class Station:
             print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
 
 # Create an AP and stations
-AP = AccessPoint(num_stations=8)
+AP = AccessPoint(num_stations=150)
 
-episode = 20
-for i in range(episode):
-    start_time = time.time()  # 시뮬레이션 시작 시간 측정
-    total_STS = 0
-    # Start Beamforming Training
-    AP.start_beamforming_training()
+episode = 1000
+with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file:
+    for i in range(episode):
+        start_time = time.time()  # 시뮬레이션 시작 시간 측정
+        total_STS = 0
+        # Start Beamforming Training
+        AP.start_beamforming_training()
 
-    while not AP.all_stations_paired():
-        for i in range(AP.num_sector):
-            AP.recieve(i)
+        while not AP.all_stations_paired():
+            for i in range(AP.num_sector):
+                AP.recieve(i)
 
-        AP.broadcast_ack()
+            AP.broadcast_ack()
 
-        if not AP.all_stations_paired():
-            total_STS += STS*AP.num_sector
-            print("Not all stations are paired. Starting next BI process.")
-            AP.next_bi()
+            if not AP.all_stations_paired():
+                total_STS += STS*AP.num_sector
+                print("Not all stations are paired. Starting next BI process.")
+                AP.next_bi()
 
-    end_time = time.time()  # 시뮬레이션 종료 시간 측정
-    total_time = end_time - start_time
-    print("All stations are paired. Simulation complete.")
-    print(f"Total simulation time: {total_time:.3f} seconds")
-    # 결과를 파일에 저장
-    with open('beamforming_simulation_results.txt', 'a') as f:
-        f.write(f"{total_time:.3f}\n")
+        end_time = time.time()  # 시뮬레이션 종료 시간 측정
+        total_time = end_time - start_time
+        print("All stations are paired. Simulation complete.")
+        print(f"Total simulation time: {total_time:.3f} seconds")
+        # 결과를 파일에 저장
+       
+        time_file.write(f"{total_time:.3f}\n")
+        sts_file.write(str(total_STS) + "\n")
         
          
