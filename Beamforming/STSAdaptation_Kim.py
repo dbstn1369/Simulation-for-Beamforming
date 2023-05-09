@@ -81,7 +81,7 @@ def SNR():
 
 
 
-STS = 15
+STS = 32
 
 
 class AccessPoint:
@@ -187,7 +187,7 @@ class Station:
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as sts_file:
     for episode in range(10):
-        AP = AccessPoint(num_stations=20)
+        AP = AccessPoint(num_stations=150)
         connected_stations = 0
         total_time = 0
         total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
