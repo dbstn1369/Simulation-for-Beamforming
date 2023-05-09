@@ -126,11 +126,11 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             action = choose_action(state, episode)
             
             if action == 0:
-                #STS = STS
+                #STS = STS Original
                 STS = max(1, STS - 1)
                 print("STS: "+ str(STS))
             elif action == 1:
-                #STS = STS
+                #STS = STS Original
                 STS = min(32, STS + 1)
                 print("STS: "+ str(STS))
             elif action == 2:
