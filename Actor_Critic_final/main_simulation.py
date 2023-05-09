@@ -15,8 +15,8 @@ AP = AccessPoint(num_stations=150, STS=STS)
 
 num_states = 3
 num_actions = 3
-actor_lr = 0.0001
-critic_lr = 0.0005
+actor_lr = 0.001
+critic_lr = 0.005
 discount_factor = 0.95
 
 
@@ -80,7 +80,7 @@ def update_actor_critic_batch(batch):
 
 
 def get_reward(AP, successful_ssw_count, STS, training_time):
-    c1, c2, c3, c4, c5 = 1, 1, 1, 1, 1
+    c1, c2, c3, c4, c5 = 0.33, 0.33, 0.33, 0.4, 0.6
     U = successful_ssw_count / (STS * AP.num_sector) 
     T_m = 1 / (1+ math.exp(-(training_time)))
 
@@ -88,7 +88,7 @@ def get_reward(AP, successful_ssw_count, STS, training_time):
     
     reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) - (c4 * C_k + c5 * T_m))))
     
-    #print(f"reward: {reward}")
+    print(f"reward: {reward}")
     
     return reward
 
@@ -127,13 +127,13 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             
             if action == 0:
                 STS = max(1, STS - 1)
-                #print("STS: "+ str(STS))
+                print("STS: "+ str(STS))
             elif action == 1:
                 STS = min(32, STS + 1)
-                #print("STS: "+ str(STS))
+                print("STS: "+ str(STS))
             elif action == 2:
                 STS = STS
-                #print("STS: "+ str(STS))
+                print("STS: "+ str(STS))
         
             for i in range(AP.num_sector):
                 AP.receive(i)
@@ -142,14 +142,14 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             AP.broadcast_ack()
 
             if not AP.all_stations_paired():
-                #print("Not all stations are paired. Starting next BI process.")
+                print("Not all stations are paired. Starting next BI process.")
                 
                 
                 f_time = time.time()  # 시간을 할당하는 부분 추가
                 time_difference = f_time - s_time
                 s_time += time_difference
                 
-                #print(f"Time spent in this BI: {time_difference:.3f} seconds")  # Add this line to print the time for each BI
+                print(f"Time spent in this BI: {time_difference:.3f} seconds")  # Add this line to print the time for each BI
                 reward = get_reward(AP,successful_ssw_count, STS, time_difference)  # Pass the prev_STS variable
                 reward_file.write(f"{reward:.3f}\n")
                 next_state = get_new_state(AP, STS)
@@ -162,13 +162,13 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                     batch = memory_buffer.sample(batch_size)
                     update_actor_critic_batch(batch)
                 
-                #print(f"Current_STS_: {STS-1}")
+                print(f"Current_STS_: {STS-1}")
                 AP.next_bi()
 
         end_time = time.time()
         total_time = end_time - start_time
-        #print(f"Episode: {episode}")
-        #print(f"Total_STS_used: {total_STS_used}")
+        print(f"Episode: {episode}")
+        print(f"Total_STS_used: {total_STS_used}")
             
         time_file.write(f"{total_time:.3f}\n")
         sts_file.write(str(total_STS_used) + "\n")

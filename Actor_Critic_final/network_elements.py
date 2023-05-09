@@ -103,7 +103,7 @@ class AccessPoint:
         
 
     def collision_probability(self):
-            return self.collisions / self.STS
+            return self.collisions / (self.STS * self.num_sector)
     
 class Station:
     def __init__(self, id, STS, position=None, AP=None):

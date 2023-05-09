@@ -104,6 +104,7 @@ AP = AccessPoint(num_stations=8)
 episode = 20
 for i in range(episode):
     start_time = time.time()  # 시뮬레이션 시작 시간 측정
+    total_STS = 0
     # Start Beamforming Training
     AP.start_beamforming_training()
 
@@ -114,6 +115,7 @@ for i in range(episode):
         AP.broadcast_ack()
 
         if not AP.all_stations_paired():
+            total_STS += STS*AP.num_sector
             print("Not all stations are paired. Starting next BI process.")
             AP.next_bi()
 
