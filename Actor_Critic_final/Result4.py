@@ -15,7 +15,7 @@ total_sts_algo2 = np.genfromtxt('total_STS_original.txt')
 episode_numbers = np.arange(1, len(total_sts_algo1) + 1)
 
 
-bin_size = 200
+bin_size = 100
 
 total_sts_avg_algo1 = np.mean(total_sts_algo1.reshape(-1, bin_size), axis=1)
 total_sts_avg_algo2 = np.mean(total_sts_algo2.reshape(-1, bin_size), axis=1)
@@ -28,8 +28,8 @@ plt.style.use('classic')
 fig, ax1 = plt.subplots()
 
 # Plot the time data on the first y-axis
-ax1.plot(episode_numbers_avg, total_sts_avg_algo1, label='Time A_C', color='r', marker='s')
-ax1.plot(episode_numbers_avg, total_sts_avg_algo2, label='Time Ori', color='m', marker='^')
+ax1.plot(episode_numbers_avg, total_sts_avg_algo1, label='STS A_C', color='r', marker='s')
+ax1.plot(episode_numbers_avg, total_sts_avg_algo2, label='STS Ori', color='m', marker='^')
 ax1.set_xlabel('Episode Number', fontsize=12)
 ax1.set_ylabel('Total STS', fontsize=12)
 
