@@ -10,6 +10,7 @@ class AccessPoint:
         self.num_stations = num_stations
         self.STS = STS
         self.num_sector = 6
+        self.total_STS_used = 0
 
         self.ssw_list = []
         self.previous_u = 0
@@ -29,6 +30,7 @@ class AccessPoint:
         self.previous_u = 0
         self.collisions = 0
         self.successful_ssw_count = 0
+        self.total_STS_used = 0
 
         for station in self.stations:
             station.reset_station()
@@ -84,6 +86,7 @@ class AccessPoint:
 
     def next_bi(self):
         self.start_beamforming_training()
+        self.total_STS_used += self.STS
         
 
           
@@ -124,6 +127,7 @@ class Station:
         self.data_success = False
         self.backoff_count = random.randint(0, self.AP.STS-1)
         self.attempts = 0
+        
 
     def receive_bti(self, beacon_frame):
         self.snr_values = np.max(beacon_frame['SNR'])

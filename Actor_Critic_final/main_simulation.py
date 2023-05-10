@@ -103,20 +103,20 @@ def get_new_state(AP):
 
 
 
-total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
+
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file, open('Reward.txt', 'a') as reward_file:
     for episode in range(100):
         connected_stations = []
         total_time = 0
         training_time = 0
         successful_ssw_count = 0
-        total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
+
         start_time = time.time()
         s_time = start_time
 
         AP.reset_all_stations()
         AP.start_beamforming_training()
-        total_STS_used += (STS*(AP.num_sector))
+        
 
         while not AP.all_stations_paired():
 
@@ -129,13 +129,16 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             if action == 0:
                 #STS = STS Original
                 STS = max(1, STS - 1)
+                AP.total_STS_used = STS * AP.num_sector
                 print("STS: "+ str(STS))
             elif action == 1:
                 #STS = STS Original
                 STS = min(32, STS + 1)
+                AP.total_STS_used = STS * AP.num_sector
                 print("STS: "+ str(STS))
             elif action == 2:
                 STS = STS
+                AP.total_STS_used = STS * AP.num_sector
                 print("STS: "+ str(STS))
         
             for i in range(AP.num_sector):
@@ -165,19 +168,16 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                     batch = memory_buffer.sample(batch_size)
                     update_actor_critic_batch(batch)
                 
-                print(f"Current_STS_: {STS}")
-                total_STS_used += (STS*(AP.num_sector))
                 AP.next_bi()
                 
             
-
-        end_time = time.time()
-        total_time = end_time - start_time
-        print(f"Episode: {episode}")
-        print(f"Total_STS_used: {total_STS_used}")
-            
-        time_file.write(f"{total_time:.3f}\n")
-        sts_file.write(str(total_STS_used) + "\n")
+            end_time = time.time()
+            total_time = end_time - start_time
+            print(f"Episode: {episode}")
+            print(f"Total_STS_used: {AP.total_STS_used}")
+                
+            time_file.write(f"{total_time:.3f}\n")
+            sts_file.write(str(AP.total_STS_used) + "\n")
 
 
 
