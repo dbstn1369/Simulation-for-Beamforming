@@ -32,7 +32,7 @@ memory_buffer = MemoryBuffer(memory_buffer_capacity)
 
 
 
-def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_decay=1000):
+def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_decay=100):
 #def choose_action(state):
     epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
     #epsilon = 0.1
@@ -84,7 +84,7 @@ def get_reward(AP, successful_ssw_count, STS, training_time):
     U = successful_ssw_count / (STS * AP.num_sector) 
     T_m = 1 / (1+ math.exp(-(training_time)))
 
-    STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+    STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
     
     reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) - (c4 * C_k + c5 * T_m))))
     
@@ -94,9 +94,9 @@ def get_reward(AP, successful_ssw_count, STS, training_time):
 
 
 
-def get_new_state(AP, STS):
+def get_new_state(AP):
 
-    sts_count, Cog, delta_u_norm, E = calculate_state_variables(AP.STS, STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+    sts_count, Cog, delta_u_norm, E = calculate_state_variables(AP.STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
 
     return [sts_count, Cog, delta_u_norm]
 
@@ -105,7 +105,7 @@ def get_new_state(AP, STS):
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file, open('Reward.txt', 'a') as reward_file:
-    for episode in range(1000):
+    for episode in range(100):
         connected_stations = []
         total_time = 0
         training_time = 0
@@ -116,12 +116,13 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
 
         AP.reset_all_stations()
         AP.start_beamforming_training()
-
+        total_STS_used += (STS*(AP.num_sector))
 
         while not AP.all_stations_paired():
 
             connected_stations = [station for station in AP.stations if station.pair]
-            state = get_new_state(AP, STS)
+            
+            state = get_new_state(AP)
             
             action = choose_action(state, episode)
             
@@ -142,6 +143,7 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                  
             successful_ssw_count = len(AP.ssw_list)
             AP.broadcast_ack()
+            
 
             if not AP.all_stations_paired():
                 print("Not all stations are paired. Starting next BI process.")
@@ -154,18 +156,20 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                 print(f"Time spent in this BI: {time_difference:.3f} seconds")  # Add this line to print the time for each BI
                 reward = get_reward(AP,successful_ssw_count, STS, time_difference)  # Pass the prev_STS variable
                 reward_file.write(f"{reward:.3f}\n")
-                next_state = get_new_state(AP, STS)
+                next_state = get_new_state(AP)
                 memory_buffer.push(state, action, reward, next_state)
                 successful_ssw_count = 0
-                total_STS_used += STS*AP.num_sector  # 누적 STS 값 업데이트
-            
-
+               
+        
                 if len(memory_buffer) >= batch_size:
                     batch = memory_buffer.sample(batch_size)
                     update_actor_critic_batch(batch)
                 
-                print(f"Current_STS_: {STS-1}")
+                print(f"Current_STS_: {STS}")
+                total_STS_used += (STS*(AP.num_sector))
                 AP.next_bi()
+                
+            
 
         end_time = time.time()
         total_time = end_time - start_time

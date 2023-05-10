@@ -45,7 +45,7 @@ def SNR():
     max_signal_level = -40
 
     # 무작위 신호 레벨 개수
-    num_signal_levels = 5
+    num_signal_levels = 6
 
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level, max_signal_level, num_signal_levels)
@@ -186,13 +186,13 @@ class Station:
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as sts_file:
-    for episode in range(10):
+    for episode in range(1000):
         AP = AccessPoint(num_stations=150)
         connected_stations = 0
         total_time = 0
         total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
         start_time = time.time()
-        s_time = time.time()
+    
         AP.start_beamforming_training()
 
         while not AP.all_stations_paired():
@@ -200,7 +200,7 @@ with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as
             sinr_values = []
             connected_stations = sum(station.pair for station in AP.stations)
             state = get_new_state(connected_stations, sinr_values)
-            total_STS_used += STS  # 누적 STS 값 업데이트
+        
 
             action = choose_action(state)
             if action == 0:
@@ -220,10 +220,8 @@ with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as
 
             if not AP.all_stations_paired():
                 print("Not all stations are paired. Starting next BI process.")
-
-                f_time = time.time()  # 시간을 할당하는 부분 추가
-                time_difference = f_time - s_time
-                s_time += time_difference
+                
+                total_STS_used += STS*AP.num_sector
 
                 reward = get_reward(successful_ssw_count, STS)
                 connected_stations = sum(station.pair for station in AP.stations)

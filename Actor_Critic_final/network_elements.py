@@ -16,12 +16,12 @@ class AccessPoint:
         self.collisions = 0
         self.successful_ssw_count = 0
 
+    
         self.min_distance = min_distance
         self.max_distance = max_distance
         station_positions = np.linspace(self.min_distance, self.max_distance, num_stations)
         self.stations = [Station(i, STS, position=station_positions[i], AP=self) for i in range(self.num_stations)]
-        self.BI = self.stations[random.randint(0, num_stations-1)]
-        self.set_random_position()
+       
 
 
     def reset_all_stations(self):
@@ -34,62 +34,58 @@ class AccessPoint:
             station.reset_station()
 
 
-    def set_random_position(self):
-        for station in self.stations:
-            station.position = np.random.uniform(self.min_distance, self.max_distance)
-
-
     def start_beamforming_training(self):
     
-        beacon_frame = self.create_beacon_frame_with_trn_r()
         unconnected_stations = [station for station in self.stations if not station.pair]
         
         for station in unconnected_stations:
+            beacon_frame = self.create_beacon_frame_with_trn_r(station)
             station.receive_bti(beacon_frame)
             station.receive_trn_r(beacon_frame)
             station.backoff_count = random.randint(0, self.STS)  # backoff_count 재설정            
 
-    def create_beacon_frame_with_trn_r(self):
-        return {'SNR': SNR(), 'trn_r': 'TRN-R data'}
+    def create_beacon_frame_with_trn_r(self, station):
+        return {'SNR': SNR_AP(station.id, station.position), 'trn_r': 'TRN-R data'}
 
 
     def receive(self, sector):
         received_signals = []
         sts_counter = [0] * self.STS
+        speed_of_light = 3e8
 
         for i in range(self.STS):
             for station in self.stations:
                 if not station.pair and sector == station.tx_sector_AP:
                     signal = station.send_ssw(i, sector)
                     if signal is not None:
-                        received_signals.append((i, signal, station))
+                        distance = station.position
+                        time = distance / speed_of_light
+                        received_signals.append((i, signal, station, time))
                         sts_counter[i] += 1
 
         collisions = [count > 1 for count in sts_counter]
         num_collisions = sum(collisions)
         self.collisions += num_collisions
 
-        for sts, signal, station in received_signals:
+        for sts, signal, station, time in received_signals:
             if not collisions[sts]:
-                self.ssw_list.append((station.id, signal))
+                self.ssw_list.append((station.id, signal, time))
                 print(f"Station {station.id} transmitted SSW frame successfully")    
             else:
                 print(f"Station {station.id} transmitted SSW frame, but it collided")
         
     
 
-    
     def broadcast_ack(self):
-        for station_id, _ in self.ssw_list:  # Use index 0 to get the station ID from the tuple
+        for station_id, _, time in self.ssw_list:  # Use index 0 to get the station ID from the tuple
             ack_frame = f"ACK_DATA_{station_id}"
             self.stations[int(station_id)].receive_ack_frame(ack_frame)
 
 
     def next_bi(self):
         self.start_beamforming_training()
-        for i in range(self.num_sector):
-            self.successful_ssw_count = self.receive(i)
-        self.broadcast_ack()
+        
+
           
   
 
@@ -106,11 +102,13 @@ class AccessPoint:
             return self.collisions / (self.STS * self.num_sector)
     
 class Station:
-    def __init__(self, id, STS, position=None, AP=None):
+    def __init__(self, id, STS, position, AP=None):
         self.id = id
-        self.sectors = [i for i in range(0, 3)]
+        self.sectors = [i for i in range(0, 4)]
         self.position = position
         self.AP = AP
+
+        self.snr_values = None
 
         self.pair = False
         self.tx_sector_AP = None
@@ -128,6 +126,7 @@ class Station:
         self.attempts = 0
 
     def receive_bti(self, beacon_frame):
+        self.snr_values = np.max(beacon_frame['SNR'])
         self.tx_sector_AP = self.get_best_sectors(beacon_frame)
         print(f"Station {self.id}: Best TX sector of AP - {self.tx_sector_AP}")
 
@@ -136,13 +135,13 @@ class Station:
         best_sector = np.argmax(snr_values)
         return best_sector
 
-    def receive_trn_r(self, beacon_frame):
-        best_rx_sector = self.get_best_rx_sector(beacon_frame)
+    def receive_trn_r(self,beacon_frame):
+        best_rx_sector = self.get_best_rx_sector()
         self.rx_sector = best_rx_sector  # rx_sector에 할당하는 부분 추가
         print(f"Station {self.id}: Best RX sector of STA after TRN-R - {best_rx_sector}")
 
-    def get_best_rx_sector(self, beacon_frame):
-        snr_values = SNR()
+    def get_best_rx_sector(self):
+        snr_values = SNR_STA()
         best_rx_sector = np.argmax(snr_values) % len(self.sectors)
         return best_rx_sector
 
@@ -152,9 +151,9 @@ class Station:
             self.rx_sector = None
             self.data_success = True
             self.attempts += 1
-            return random.uniform(0.0001, 0.001)  # 임의의 수신 신호 전송
+            return self.snr_values if self.snr_values is not None else None
         return None
-
+             
 
     def receive_ack_frame(self, ack_frame):
         expected_ack_frame = f"ACK_DATA_{self.id}"
@@ -168,59 +167,37 @@ class Station:
             print(f"Station {self.id} is already paired")
 
 
-def calculate_state_variables(STS, s_sts, AP):
-    C_k = 0
-    C_norm = 0
-    alpha = 0.9
+def calculate_state_variables(STS, AP):
+    # Calculate delay
+    received_times = [time for _, _, time in AP.ssw_list]
     
-    collision_prob = AP.collision_probability()
-    AP.collisions = 0
-    print(f"Collision probability: {collision_prob}")
-    # Calculate current STS count
-    if isinstance(STS, int):
-        s_sts = STS
-    else:
-        s_sts = int(STS)
+    min_delay = min(received_times) if len(received_times) > 0 else 0  # or any other default value
 
-    propagation_delay = []
-    for station in AP.stations:
-        delay = np.linalg.norm(station.position - 0) / 3e8
-        propagation_delay.append(delay)
+    max_delay = max(received_times) if len(received_times) > 0 else 0  # or any other default value
 
-    min_propagation_delay = np.linalg.norm(AP.min_distance) / 3e8
-    max_propagation_delay = np.linalg.norm(AP.max_distance) / 3e8
 
-    W = []
-    for pd in propagation_delay:
-        S_norm = (pd - min_propagation_delay) / (max_propagation_delay - min_propagation_delay)
-        W.append(1 - S_norm)
 
-     # Calculate congestion
-    weighted_snr_sum = 0
-    weight_sum = 0
-    for (station_id, ssw), wi in zip(AP.ssw_list, W):
+    th_max = 0
+    th = 0
+    for (station_id, ssw, time) in AP.ssw_list:
         station = AP.stations[int(station_id)]
-        delay = np.linalg.norm(station.position - 0) / 3e8
-        S_norm = (delay - np.linalg.norm(AP.min_distance) / 3e8) / (np.linalg.norm(AP.max_distance - AP.min_distance) / 3e8)
+        snr = station.snr_values
         
-        weight = wi
-        weighted_snr_sum += weight * ssw
-        weight_sum += weight
+        delay_norm = (time - min_delay) / (max_delay - min_delay)
 
-        C = weighted_snr_sum / weight_sum
-        min_ssw = np.min([ssw for _, ssw in AP.ssw_list])
-        max_ssw = np.max([ssw for _, ssw in AP.ssw_list])
+        weight = 1 / delay_norm
+        th += weight * snr
+        w_max = 1 / (20 * np.log10( AP.min_distance / AP.min_distance))  # Adjust the formula if the PL(d_0) is not 20
+        th_max += w_max * ssw
 
-        if max_ssw != min_ssw:
-            C_norm = (C - min_ssw) / (max_ssw - min_ssw)
-        else:
-            C_norm = 0
+    if th_max == 0:
+        print("Warning: th_max is zero, defaulting C_k to 0")
+        C_k = 0
+    else:
+        C_k = 1 / (1 + np.exp(-((th_max - th) / th_max)))
 
-    C_k = 1 / (1 + np.exp(-alpha * (collision_prob-C_norm)))
-
-    print(f"C_k: {C_k}")
     # Calculate STS usage
-    N_ack = sum([1 for station in AP.stations if station.data_success])
+    N_ack = sum([station.data_success for station in AP.stations])
     U_current = N_ack / (STS*AP.num_sector)
     U_previous = AP.previous_u
     delta_U = U_current - U_previous
@@ -231,45 +208,61 @@ def calculate_state_variables(STS, s_sts, AP):
 
     if delta_U_max != delta_U_min:
         delta_U_norm = (delta_U - delta_U_min) / (delta_U_max - delta_U_min)
-            # Make sure delta_U_norm is between 0 and 1
+        # Make sure delta_U_norm is between 0 and 1
         delta_U_norm = max(0, min(1, delta_U_norm))
     else:
         delta_U_norm = 0
 
     AP.previous_u = U_current
 
-
-       # Calculate energy consumption
+    # Calculate energy consumption
     P_rx = 10
-    T_rx = max_propagation_delay
+    T_rx = max_delay
     P_idle = 1
-    T_idle = min_propagation_delay
+    T_idle = min_delay
 
-    N_rx = sum([1 for station in AP.stations if station.data_success])  # 수신된 STS 개수 계산
-    N_idle = (STS*AP.num_sector) - N_rx  # 대기 중인 STS 개수 계산
+    N_rx = sum([station.data_success for station in AP.stations])
+    N_idle = (STS*AP.num_sector) - N_rx
 
     E_rx = P_rx * T_rx
     E_idle = P_idle * T_idle
     E_t = E_rx * N_rx + E_idle * N_idle
 
-    E = 1 / (1 + math.exp(-(E_t)))
+    E = 1 / (1 + np.exp(-(E_t)))
 
-    return s_sts, C_k, delta_U_norm, E
-    #return s_sts, C_k, delta_U_norm
+    return STS, C_k, delta_U_norm, E
 
-# def SINR(received_signal, interfering_signals, noise_power=1e-9):
-#     interference = sum(interfering_signals)
-#     return received_signal / (interference + noise_power)
 
-def SNR():
+
+def SNR_STA():
     # 신호 레벨 범위 (dBm 단위)
-    min_signal_level = -80
-    max_signal_level = -40
+    min_signal_level = 80
+    max_signal_level = 30
 
     # 무작위 신호 레벨 개수
-    num_signal_levels = 6
+    num_signal_levels = 4
 
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level, max_signal_level, num_signal_levels)
     print("Random signal levels (dBm):", random_signal_levels)
     return random_signal_levels
+
+
+
+def SNR_AP(station_id, distance):
+    # 거리에 따른 path loss 값 계산
+    d0 = 1  # 레퍼런스 거리 (1m로 가정)
+    PL_d0 = 20  # d0에서의 손실 값 (20dB로 가정)
+    n = 2.7  # path loss exponent (거리에 따라 다르게 설정됨)
+    PL_d = PL_d0 + 10 * n * np.log10(distance/d0)
+    # 신호 레벨 범위 (dBm 단위)
+    min_signal_level = 80 + station_id  # station_id를 사용하여 신호 레벨 범위를 변경
+    max_signal_level = 30 + station_id  # station_id를 사용하여 신호 레벨 범위를 변경
+    # 무작위 신호 레벨 개수
+    num_signal_levels = 6
+    # 무작위 신호 레벨 생성
+    random_signal_levels = np.random.uniform(min_signal_level - PL_d, max_signal_level - PL_d, num_signal_levels)
+    print(f"Random signal levels (dBm) for station {station_id}:", random_signal_levels)
+    return random_signal_levels
+
+
