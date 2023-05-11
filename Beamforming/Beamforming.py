@@ -98,12 +98,13 @@ class Station:
         else:
             print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
 
-# Create an AP and stations
-AP = AccessPoint(num_stations=150)
+
 
 episode = 1000
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file:
     for i in range(episode):
+        # Create an AP and stations
+        AP = AccessPoint(num_stations=150)
         start_time = time.time()  # 시뮬레이션 시작 시간 측정
         total_STS = 0
         # Start Beamforming Training

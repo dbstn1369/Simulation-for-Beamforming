@@ -9,7 +9,7 @@ class AccessPoint:
     def __init__(self, num_stations, STS, min_distance=10, max_distance=100):
         self.num_stations = num_stations
         self.STS = STS
-        self.num_sector = 6
+        self.num_sector = [i for i in range(0, 6)]
         self.total_STS_used = 0
 
         self.ssw_list = []
@@ -22,19 +22,11 @@ class AccessPoint:
         self.max_distance = max_distance
         station_positions = np.linspace(self.min_distance, self.max_distance, num_stations)
         self.stations = [Station(i, STS, position=station_positions[i], AP=self) for i in range(self.num_stations)]
+
        
 
-
-    def reset_all_stations(self):
-        self.ssw_list = []
-        self.previous_u = 0
-        self.collisions = 0
-        self.successful_ssw_count = 0
-        self.total_STS_used = 0
-
-        for station in self.stations:
-            station.reset_station()
-
+    def update_STS(self, new_STS):
+            self.STS = new_STS
 
     def start_beamforming_training(self):
     
@@ -65,6 +57,10 @@ class AccessPoint:
                         received_signals.append((i, signal, station, time))
                         sts_counter[i] += 1
 
+        
+        self.handle_received_signals(received_signals, sts_counter)
+        
+    def handle_received_signals(self, received_signals, sts_counter):
         collisions = [count > 1 for count in sts_counter]
         num_collisions = sum(collisions)
         self.collisions += num_collisions
@@ -75,7 +71,7 @@ class AccessPoint:
                 print(f"Station {station.id} transmitted SSW frame successfully")    
             else:
                 print(f"Station {station.id} transmitted SSW frame, but it collided")
-        
+
     
 
     def broadcast_ack(self):
@@ -86,11 +82,9 @@ class AccessPoint:
 
     def next_bi(self):
         self.start_beamforming_training()
-        self.total_STS_used += self.STS
         
 
           
-  
 
     def all_stations_paired(self):
         unpaired_stations = [station for station in self.stations if not station.pair]
@@ -101,8 +95,6 @@ class AccessPoint:
             return True
         
 
-    def collision_probability(self):
-            return self.collisions / (self.STS * self.num_sector)
     
 class Station:
     def __init__(self, id, STS, position, AP=None):
@@ -120,14 +112,6 @@ class Station:
         self.backoff_count = random.randint(0, STS-1)
         self.attempts = 0
 
-    def reset_station(self):
-        self.pair = False
-        self.tx_sector_AP = None
-        self.rx_sector = None
-        self.data_success = False
-        self.backoff_count = random.randint(0, self.AP.STS-1)
-        self.attempts = 0
-        
 
     def receive_bti(self, beacon_frame):
         self.snr_values = np.max(beacon_frame['SNR'])
@@ -186,29 +170,30 @@ def calculate_state_variables(STS, AP):
     for (station_id, ssw, time) in AP.ssw_list:
         station = AP.stations[int(station_id)]
         snr = station.snr_values
-        
-        delay_norm = (time - min_delay) / (max_delay - min_delay)
-
-        weight = 1 / delay_norm
+      
+        delay_norm = (time - min_delay) / (max_delay - min_delay) if max_delay != min_delay else 1
+    
+        weight = 1 / delay_norm if delay_norm != 0 else 1  # adding special handling for delay_norm = 0
         th += weight * snr
-        w_max = 1 / (20 * np.log10( AP.min_distance / AP.min_distance))  # Adjust the formula if the PL(d_0) is not 20
-        th_max += w_max * ssw
+      
+        w_max = 1  #no path loss 
+        th_max += w_max * snr  # Assuming that ssw should be replaced with snr
 
     if th_max == 0:
         print("Warning: th_max is zero, defaulting C_k to 0")
-        C_k = 0
+        C_k = 1
     else:
-        C_k = 1 / (1 + np.exp(-((th_max - th) / th_max)))
+        C_k = (th_max - th) / th_max  # Replacing sigmoid function with original equation
 
     # Calculate STS usage
     N_ack = sum([station.data_success for station in AP.stations])
-    U_current = N_ack / (STS*AP.num_sector)
+    U_current = N_ack / (STS*len(AP.num_sector))
     U_previous = AP.previous_u
     delta_U = U_current - U_previous
 
     # Calculate minimum and maximum possible values of delta_U
     delta_U_min = -U_previous
-    delta_U_max = (AP.num_stations - N_ack) / STS * AP.num_sector - U_previous
+    delta_U_max = (AP.num_stations - N_ack) / STS * len(AP.num_sector) - U_previous
 
     if delta_U_max != delta_U_min:
         delta_U_norm = (delta_U - delta_U_min) / (delta_U_max - delta_U_min)
@@ -226,7 +211,7 @@ def calculate_state_variables(STS, AP):
     T_idle = min_delay
 
     N_rx = sum([station.data_success for station in AP.stations])
-    N_idle = (STS*AP.num_sector) - N_rx
+    N_idle = (STS*len(AP.num_sector)) - N_rx
 
     E_rx = P_rx * T_rx
     E_idle = P_idle * T_idle
@@ -240,32 +225,34 @@ def calculate_state_variables(STS, AP):
 
 def SNR_STA():
     # 신호 레벨 범위 (dBm 단위)
-    min_signal_level = 80
-    max_signal_level = 30
+    max_signal_level = 80
+    min_signal_level = 30
 
     # 무작위 신호 레벨 개수
     num_signal_levels = 4
 
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level, max_signal_level, num_signal_levels)
+    random_signal_levels = np.around(random_signal_levels, 4)
     print("Random signal levels (dBm):", random_signal_levels)
     return random_signal_levels
 
 
 
 def SNR_AP(station_id, distance):
-    # 거리에 따른 path loss 값 계산
+    # # 거리에 따른 path loss 값 계산
     d0 = 1  # 레퍼런스 거리 (1m로 가정)
     PL_d0 = 20  # d0에서의 손실 값 (20dB로 가정)
     n = 2.7  # path loss exponent (거리에 따라 다르게 설정됨)
     PL_d = PL_d0 + 10 * n * np.log10(distance/d0)
-    # 신호 레벨 범위 (dBm 단위)
-    min_signal_level = 80 + station_id  # station_id를 사용하여 신호 레벨 범위를 변경
-    max_signal_level = 30 + station_id  # station_id를 사용하여 신호 레벨 범위를 변경
+    # # 신호 레벨 범위 (dBm 단위)
+    max_signal_level = 100 
+    min_signal_level = 40 
     # 무작위 신호 레벨 개수
     num_signal_levels = 6
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level - PL_d, max_signal_level - PL_d, num_signal_levels)
+    random_signal_levels = np.around(random_signal_levels, 4)
     print(f"Random signal levels (dBm) for station {station_id}:", random_signal_levels)
     return random_signal_levels
 

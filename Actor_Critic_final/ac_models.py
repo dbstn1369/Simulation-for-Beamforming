@@ -15,6 +15,7 @@ class Actor(nn.Module):
         x = torch.relu(self.fc2(x))
         x = self.softmax(self.fc3(x))
         return x
+    
 
 class Critic(nn.Module):
     def __init__(self, num_states):
