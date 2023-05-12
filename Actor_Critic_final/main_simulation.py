@@ -105,8 +105,8 @@ def get_new_state(AP):
 
 
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file, open('Reward.txt', 'a') as reward_file:
-    for episode in range(1000):
-        AP = AccessPoint(num_stations=150, STS=STS)
+    for episode in range(5000):
+        AP = AccessPoint(num_stations=250, STS=STS)
         
         connected_stations = []
         total_time = 0

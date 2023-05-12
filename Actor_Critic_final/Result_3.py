@@ -13,7 +13,7 @@ total_times_algo2 = np.genfromtxt('total_time_original.txt')
 episode_numbers = np.arange(1, len(total_times_algo1) + 1)
 
 
-bin_size = 150
+bin_size = 100
 total_times_avg_algo1 = np.mean(total_times_algo1.reshape(-1, bin_size), axis=1)
 
 total_times_avg_algo2 = np.mean(total_times_algo2.reshape(-1, bin_size), axis=1)
