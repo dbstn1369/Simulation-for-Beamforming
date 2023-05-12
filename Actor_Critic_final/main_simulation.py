@@ -9,8 +9,10 @@ from network_elements import AccessPoint, calculate_state_variables
 import math
 import random
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
 
-STS = 32
+STS = 15
 
 num_states = 3
 num_actions = 3
@@ -19,25 +21,25 @@ critic_lr = 0.005
 discount_factor = 0.95
 
 
-actor = Actor(num_states, num_actions)
-critic = Critic(num_states)
+actor = Actor(num_states, num_actions).to(device)
+critic = Critic(num_states).to(device)
 actor_optimizer = optim.Adam(actor.parameters(), lr=actor_lr)
 critic_optimizer = optim.Adam(critic.parameters(), lr=critic_lr)
 
-memory_buffer_capacity = 1000
+memory_buffer_capacity = 100
 batch_size = 32
 memory_buffer = MemoryBuffer(memory_buffer_capacity)
 
 
 
-def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_decay=300):
-
+def choose_action(state, episode, epsilon_start=0.3, epsilon_end=0.01, epsilon_decay=1000):
+#def choose_action(state):
     epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
-
-    state_tensor = torch.FloatTensor(state).unsqueeze(0)
+    #epsilon = 0.1
+    state_tensor = torch.FloatTensor(state).unsqueeze(0).to(device)
     with torch.no_grad():
         action_probs = actor(state_tensor)
-    action_probs = action_probs.squeeze().numpy()  # Flatten action_probs to 1D numpy array
+    action_probs = action_probs.cpu().squeeze().numpy()  # Flatten action_probs to 1D numpy array
     action_probs = np.nan_to_num(action_probs, nan=1/len(action_probs))  # Replace NaN values with a small value
     action_probs /= action_probs.sum()  # Normalize the probabilities
 
@@ -51,12 +53,12 @@ def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_d
 def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
     states, actions, rewards, next_states = zip(*batch)
 
-    states_tensor = torch.FloatTensor(states)
-    next_states_tensor = torch.FloatTensor(next_states)
-    actions_tensor = torch.LongTensor(actions)
-    rewards_tensor = torch.FloatTensor(rewards)
+    states_tensor = torch.FloatTensor(states).to(device)
+    next_states_tensor = torch.FloatTensor(next_states).to(device)
+    actions_tensor = torch.LongTensor(actions).to(device)
+    rewards_tensor = torch.FloatTensor(rewards).to(device)
 
-    values = critic(states_tensor)
+    values = critic(states_tensor).expand(-1, 32)
     next_values = critic(next_states_tensor).detach()
     target_values = rewards_tensor + discount_factor * next_values
 
@@ -78,15 +80,16 @@ def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
 
 
 def get_reward(AP, successful_ssw_count, STS, training_time):
-    c1, c2, c3, c4, c5 = 0.33, 0.33, 0.33, 0.4, 0.6
+    c1, c2, c3, c4, c5 = 0.5, 0.5, 1, 0.5, 1
     U = successful_ssw_count / (STS * len(AP.num_sector)) 
     T_m = 1 / (1+ math.exp(-(training_time)))
 
     STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
     
     reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) - (c4 * C_k + c5 * T_m))))
+    #reward = (c1 * U + c2 * delta_u_norm + c3 * E) - (c4 * C_k + c5 * T_m)
     
-    print(f"reward: {reward}")
+    #print(f"reward: {reward}")
     
     return reward
 
@@ -102,8 +105,8 @@ def get_new_state(AP):
 
 
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file, open('Reward.txt', 'a') as reward_file:
-    for episode in range(300):
-        AP = AccessPoint(num_stations=150, STS=STS)
+    for episode in range(1000):
+        AP = AccessPoint(num_stations=200, STS=STS)
         
         connected_stations = []
         total_time = 0
@@ -112,7 +115,6 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
         start_time = time.time()
         s_time = start_time
 
-       # AP.reset_all_stations()
         AP.start_beamforming_training()
         
 
@@ -131,31 +133,29 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             state = get_new_state(AP)
             
             action = choose_action(state, episode)
-            
+            #action = choose_action(state)
+
             if action == 0:
-                #STS = STS Original
-                STS = max(1, STS - 1)
-                print("STS: "+ str(STS))
+                STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
+                #print("STS: "+ str(STS))
             elif action == 1:
-                #STS = STS Original
-                STS = min(32, STS + 1)
-                print("STS: "+ str(STS))
+                STS = max(5, STS - 1)
+                #print("STS: "+ str(STS))
             elif action == 2:
                 STS = STS
-                print("STS: "+ str(STS))
+                #print("STS: "+ str(STS))
             
             AP.update_STS(STS)
             
 
             if not AP.all_stations_paired():
-                print("Not all stations are paired. Starting next BI process.")
+                #print("Not all stations are paired. Starting next BI process.")
                 
-                
+                AP.next_bi()
                 f_time = time.time()  # 시간을 할당하는 부분 추가
                 time_difference = f_time - s_time
+                #print(f"Time spent in this BI: {time_difference:.3f} seconds")  # Add this line to print the time for each BI
                 s_time += time_difference
-                
-                print(f"Time spent in this BI: {time_difference:.3f} seconds")  # Add this line to print the time for each BI
                 reward = get_reward(AP,successful_ssw_count, STS, time_difference)  # Pass the prev_STS variable
                 reward_file.write(f"{reward:.3f}\n")
                 next_state = get_new_state(AP)
@@ -167,8 +167,6 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                     batch = memory_buffer.sample(batch_size)
                     update_actor_critic_batch(batch, critic_optimizer, actor_optimizer)
                 
-                AP.next_bi()
-                
             
         end_time = time.time()
         total_time = end_time - start_time
@@ -177,6 +175,13 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             
         time_file.write(f"{total_time:.3f}\n")
         sts_file.write(str(AP.total_STS_used) + "\n")
+
+
+    print("Number of GPUs: ", torch.cuda.device_count())
+    print("GPU name: ", torch.cuda.get_device_name(0))
+    print("Memory Used: ", torch.cuda.memory_allocated())
+    print("Memory Reserved: ", torch.cuda.memory_reserved())
+    torch.cuda.empty_cache()
 
 
 

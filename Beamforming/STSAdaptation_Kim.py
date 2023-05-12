@@ -7,7 +7,7 @@ num_actions = 3  # 증가, 감소, 그대로 유지
 q_table = np.zeros((num_states, num_actions))
 
 learning_rate = 0.1
-discount_factor = 0.99
+discount_factor = 0.95
 exploration_rate = 1.0
 exploration_rate_decay = 0.001
 
@@ -49,7 +49,7 @@ def SNR():
 
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level, max_signal_level, num_signal_levels)
-    print("Random signal levels (dBm):", random_signal_levels)
+    #print("Random signal levels (dBm):", random_signal_levels)
     return random_signal_levels
 
 # # qd-realization 시나리오 출력을 파싱하는 함수를 추가
@@ -81,7 +81,7 @@ def SNR():
 
 
 
-STS = 32
+STS = 15
 
 
 class AccessPoint:
@@ -151,7 +151,7 @@ class Station:
 
     def receive_bti(self, beacon_frame):
         self.tx_sector_AP = self.get_best_sectors(beacon_frame)
-        print(f"Station {self.id}: Best TX sector of AP - {self.tx_sector_AP}")
+        #print(f"Station {self.id}: Best TX sector of AP - {self.tx_sector_AP}")
 
     def get_best_sectors(self, beacon_frame):
         snr_values = beacon_frame['SNR']
@@ -161,7 +161,7 @@ class Station:
     def receive_trn_r(self, beacon_frame):
         best_rx_sector = self.get_best_rx_sector(beacon_frame)
         self.rx_sector = best_rx_sector  # rx_sector에 할당하는 부분 추가
-        print(f"Station {self.id}: Best RX sector of STA after TRN-R - {best_rx_sector}")
+        #print(f"Station {self.id}: Best RX sector of STA after TRN-R - {best_rx_sector}")
 
     def get_best_rx_sector(self, beacon_frame):
         snr_values = SNR()
@@ -172,7 +172,7 @@ class Station:
         if not self.pair and STS == self.backoff_count:  # 이미 연결된 STA들이 참여하지 않도록 조건 추가
             self.rx_sector = None
             self.data_success = True
-            print("Station " + str(self.id) + " transmitted SSW frame successfully")
+            #print("Station " + str(self.id) + " transmitted SSW frame successfully")
             return random.uniform(0.0001, 0.001)  # 임의의 수신 신호 전송
         return None
 
@@ -180,14 +180,14 @@ class Station:
         if self.pair == False:
             if self.data_success == True:
                 self.pair = True
-                print("Station " + str(self.id) + " received ACK successfully")
-        else:
-            print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
+                #print("Station " + str(self.id) + " received ACK successfully")
+        #else:
+            #print("Station " + str(self.id) + " did not receive ACK, will retry in the next BI")
 
 total_STS_used = 0  # 누적된 STS 수를 저장할 변수 추가
 with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as sts_file:
     for episode in range(1000):
-        AP = AccessPoint(num_stations=150)
+        AP = AccessPoint(num_stations=200)
         connected_stations = 0
         total_time = 0
         total_STS_used = 0  # 에피소드가 시작시 누적된 STS 값을 초기화
@@ -206,7 +206,9 @@ with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as
             if action == 0:
                 STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
             elif action == 1:
-                STS = max(1, STS - 1)
+                STS = max(5, STS - 1)
+            elif action == 2:
+                STS = STS
 
             successful_ssw_count = 0
             sinr_values = []
@@ -219,7 +221,7 @@ with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as
             AP.broadcast_ack()
 
             if not AP.all_stations_paired():
-                print("Not all stations are paired. Starting next BI process.")
+                #print("Not all stations are paired. Starting next BI process.")
                 
                 total_STS_used += STS*AP.num_sector
 

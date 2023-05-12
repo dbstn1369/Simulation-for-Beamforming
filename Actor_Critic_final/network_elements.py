@@ -68,9 +68,9 @@ class AccessPoint:
         for sts, signal, station, time in received_signals:
             if not collisions[sts]:
                 self.ssw_list.append((station.id, signal, time))
-                print(f"Station {station.id} transmitted SSW frame successfully")    
-            else:
-                print(f"Station {station.id} transmitted SSW frame, but it collided")
+                #print(f"Station {station.id} transmitted SSW frame successfully")    
+            #else:
+                #print(f"Station {station.id} transmitted SSW frame, but it collided")
 
     
 
@@ -89,7 +89,7 @@ class AccessPoint:
     def all_stations_paired(self):
         unpaired_stations = [station for station in self.stations if not station.pair]
         if unpaired_stations:
-            print(f"Unpaired stations: {[station.id for station in unpaired_stations]}")
+            #print(f"Unpaired stations: {[station.id for station in unpaired_stations]}")
             return False
         else:
             return True
@@ -116,7 +116,7 @@ class Station:
     def receive_bti(self, beacon_frame):
         self.snr_values = np.max(beacon_frame['SNR'])
         self.tx_sector_AP = self.get_best_sectors(beacon_frame)
-        print(f"Station {self.id}: Best TX sector of AP - {self.tx_sector_AP}")
+        #print(f"Station {self.id}: Best TX sector of AP - {self.tx_sector_AP}")
 
     def get_best_sectors(self, beacon_frame):
         snr_values = beacon_frame['SNR']
@@ -126,7 +126,7 @@ class Station:
     def receive_trn_r(self,beacon_frame):
         best_rx_sector = self.get_best_rx_sector()
         self.rx_sector = best_rx_sector  # rx_sector에 할당하는 부분 추가
-        print(f"Station {self.id}: Best RX sector of STA after TRN-R - {best_rx_sector}")
+        #print(f"Station {self.id}: Best RX sector of STA after TRN-R - {best_rx_sector}")
 
     def get_best_rx_sector(self):
         snr_values = SNR_STA()
@@ -148,11 +148,11 @@ class Station:
         if not self.pair:
             if self.data_success and ack_frame == expected_ack_frame:
                 self.pair = True
-                print(f"Station {self.id} received ACK successfully")
-            else:
-                print(f"Station {self.id} did not receive ACK, will retry in the next BI")
-        else:
-            print(f"Station {self.id} is already paired")
+                #print(f"Station {self.id} received ACK successfully")
+            #else:
+                #print(f"Station {self.id} did not receive ACK, will retry in the next BI")
+        #else:
+            #print(f"Station {self.id} is already paired")
 
 
 def calculate_state_variables(STS, AP):
@@ -171,16 +171,21 @@ def calculate_state_variables(STS, AP):
         station = AP.stations[int(station_id)]
         snr = station.snr_values
       
-        delay_norm = (time - min_delay) / (max_delay - min_delay) if max_delay != min_delay else 1
+        if max_delay == min_delay:
+                delay_norm = 0
+            
+        else:
+            delay_norm = (time - min_delay) / (max_delay - min_delay)
+       
     
-        weight = 1 / delay_norm if delay_norm != 0 else 1  # adding special handling for delay_norm = 0
+        weight = 1 - delay_norm
         th += weight * snr
       
         w_max = 1  #no path loss 
         th_max += w_max * snr  # Assuming that ssw should be replaced with snr
 
     if th_max == 0:
-        print("Warning: th_max is zero, defaulting C_k to 0")
+        #print("Warning: th_max is zero, defaulting C_k to 0")
         C_k = 1
     else:
         C_k = (th_max - th) / th_max  # Replacing sigmoid function with original equation
@@ -234,7 +239,7 @@ def SNR_STA():
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level, max_signal_level, num_signal_levels)
     random_signal_levels = np.around(random_signal_levels, 4)
-    print("Random signal levels (dBm):", random_signal_levels)
+    #print("Random signal levels (dBm):", random_signal_levels)
     return random_signal_levels
 
 
@@ -242,8 +247,8 @@ def SNR_STA():
 def SNR_AP(station_id, distance):
     # # 거리에 따른 path loss 값 계산
     d0 = 1  # 레퍼런스 거리 (1m로 가정)
-    PL_d0 = 20  # d0에서의 손실 값 (20dB로 가정)
-    n = 2.7  # path loss exponent (거리에 따라 다르게 설정됨)
+    PL_d0 = 2  # d0에서의 손실 값 (2dB로 가정)
+    n = 2  # path loss exponent (거리에 따라 다르게 설정됨)
     PL_d = PL_d0 + 10 * n * np.log10(distance/d0)
     # # 신호 레벨 범위 (dBm 단위)
     max_signal_level = 100 
@@ -253,7 +258,7 @@ def SNR_AP(station_id, distance):
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level - PL_d, max_signal_level - PL_d, num_signal_levels)
     random_signal_levels = np.around(random_signal_levels, 4)
-    print(f"Random signal levels (dBm) for station {station_id}:", random_signal_levels)
+    #print(f"Random signal levels (dBm) for station {station_id}:", random_signal_levels)
     return random_signal_levels
 
 
