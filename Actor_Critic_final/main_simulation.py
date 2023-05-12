@@ -12,13 +12,13 @@ import random
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
-STS = 15
+STS = 32
 
 num_states = 3
-num_actions = 3
+num_actions = 5
 actor_lr = 0.001
 critic_lr = 0.005
-discount_factor = 0.95
+discount_factor = 0.4
 
 
 actor = Actor(num_states, num_actions).to(device)
@@ -32,10 +32,10 @@ memory_buffer = MemoryBuffer(memory_buffer_capacity)
 
 
 
-def choose_action(state, episode, epsilon_start=0.3, epsilon_end=0.01, epsilon_decay=1000):
-#def choose_action(state):
-    epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
-    #epsilon = 0.1
+#def choose_action(state, episode, epsilon_start=0.2, epsilon_end=0.01, epsilon_decay=1000):
+def choose_action(state):
+    #epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
+    epsilon = 0.1
     state_tensor = torch.FloatTensor(state).unsqueeze(0).to(device)
     with torch.no_grad():
         action_probs = actor(state_tensor)
@@ -80,7 +80,7 @@ def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
 
 
 def get_reward(AP, successful_ssw_count, STS, training_time):
-    c1, c2, c3, c4, c5 = 0.5, 0.5, 1, 0.5, 1
+    c1, c2, c3, c4, c5 = 0.5, 1, 2, 1, 1.5 
     U = successful_ssw_count / (STS * len(AP.num_sector)) 
     T_m = 1 / (1+ math.exp(-(training_time)))
 
@@ -106,7 +106,7 @@ def get_new_state(AP):
 
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file, open('Reward.txt', 'a') as reward_file:
     for episode in range(1000):
-        AP = AccessPoint(num_stations=200, STS=STS)
+        AP = AccessPoint(num_stations=150, STS=STS)
         
         connected_stations = []
         total_time = 0
@@ -132,19 +132,30 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                         
             state = get_new_state(AP)
             
-            action = choose_action(state, episode)
-            #action = choose_action(state)
+            #action = choose_action(state, episode)
+            action = choose_action(state)
+
+  
 
             if action == 0:
-                STS = min(32, STS + 1)  # STS 개수를 최대 32개로 제한
+                STS = max(15, STS - 2)  # Decrease STS by 2, ensuring it doesn't go below 1
+                #STS = STS
                 #print("STS: "+ str(STS))
             elif action == 1:
-                STS = max(5, STS - 1)
+                STS = max(15, STS - 1)  # Decrease STS by 1, ensuring it doesn't go below 1
+                #STS = STS
                 #print("STS: "+ str(STS))
             elif action == 2:
-                STS = STS
+                STS = STS  # Keep STS unchanged
                 #print("STS: "+ str(STS))
-            
+            elif action == 3:
+                STS = min(32, STS + 1)  # Increase STS by 1, ensuring it doesn't exceed 32
+                #STS = STS
+                #print("STS: "+ str(STS))
+            else:
+                STS = min(32, STS + 2)  # Increase STS by 2, ensuring it doesn't exceed 32 
+                #STS = STS   
+                #print("STS: "+ str(STS))    
             AP.update_STS(STS)
             
 

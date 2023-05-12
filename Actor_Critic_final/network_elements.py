@@ -9,7 +9,7 @@ class AccessPoint:
     def __init__(self, num_stations, STS, min_distance=10, max_distance=100):
         self.num_stations = num_stations
         self.STS = STS
-        self.num_sector = [i for i in range(0, 6)]
+        self.num_sector = [i for i in range(0, 7)]
         self.total_STS_used = 0
 
         self.ssw_list = []
@@ -254,7 +254,7 @@ def SNR_AP(station_id, distance):
     max_signal_level = 100 
     min_signal_level = 40 
     # 무작위 신호 레벨 개수
-    num_signal_levels = 6
+    num_signal_levels = 7
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level - PL_d, max_signal_level - PL_d, num_signal_levels)
     random_signal_levels = np.around(random_signal_levels, 4)
