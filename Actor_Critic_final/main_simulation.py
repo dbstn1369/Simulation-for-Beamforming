@@ -18,7 +18,7 @@ num_states = 3
 num_actions = 5
 actor_lr = 0.001
 critic_lr = 0.005
-discount_factor = 0.4
+discount_factor = 0.95
 
 
 actor = Actor(num_states, num_actions).to(device)
@@ -32,10 +32,10 @@ memory_buffer = MemoryBuffer(memory_buffer_capacity)
 
 
 
-#def choose_action(state, episode, epsilon_start=0.2, epsilon_end=0.01, epsilon_decay=1000):
-def choose_action(state):
-    #epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
-    epsilon = 0.1
+def choose_action(state, episode, epsilon_start=0.3, epsilon_end=0.01, epsilon_decay=10000):
+#def choose_action(state):
+    epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
+    #epsilon = 0.1
     state_tensor = torch.FloatTensor(state).unsqueeze(0).to(device)
     with torch.no_grad():
         action_probs = actor(state_tensor)
@@ -79,15 +79,19 @@ def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
     
 
 
-def get_reward(AP, successful_ssw_count, STS, training_time):
-    c1, c2, c3, c4, c5 = 0.5, 1, 2, 1, 1.5 
-    U = successful_ssw_count / (STS * len(AP.num_sector)) 
-    T_m = 1 / (1+ math.exp(-(training_time)))
-
-    STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+def get_reward(AP, successful_ssw_count, STS, bi):
+    c1, c2, c3, c4 = 1, 2.5, 1, 2
     
-    reward = 1 / (1 + math.exp(-((c1 * U + c2 * delta_u_norm + c3 * E) - (c4 * C_k + c5 * T_m))))
-    #reward = (c1 * U + c2 * delta_u_norm + c3 * E) - (c4 * C_k + c5 * T_m)
+    U = successful_ssw_count / (STS * len(AP.num_sector)) 
+    T_max = 32*len(AP.num_sector)
+    T_min = 1*len(AP.num_sector)
+    T_m = ((STS*len(AP.num_sector)) - T_min) / (T_max - T_min) 
+ 
+    STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+    #print(f"-> {U, delta_u_norm, E, C_k, T_m}")
+     
+    reward = 1 / (1 + math.exp(-((c1 * U + c2 * E) - (c3 * bi + c4 * T_m))))
+    #reward = (c1 * U + c2 * E) - (c3 * bi + c4 * T_m)
     
     #print(f"reward: {reward}")
     
@@ -103,15 +107,15 @@ def get_new_state(AP):
 
 
 
-
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file, open('Reward.txt', 'a') as reward_file:
-    for episode in range(5000):
-        AP = AccessPoint(num_stations=250, STS=STS)
+    for episode in range(10000):
+        AP = AccessPoint(num_stations=500, STS=STS)
         
         connected_stations = []
         total_time = 0
         successful_ssw_count = 0
-
+        bi = 0
+        previous_STS = 0
         start_time = time.time()
         s_time = start_time
 
@@ -126,57 +130,58 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                 AP.receive(i)
                  
             successful_ssw_count = len(AP.ssw_list)
+            #print("swc:" + str(successful_ssw_count))
             AP.broadcast_ack()
 
             AP.total_STS_used += STS * len(AP.num_sector)
                         
             state = get_new_state(AP)
+            previous_STS = STS
             
-            #action = choose_action(state, episode)
-            action = choose_action(state)
-
-  
-
+            action = choose_action(state, episode)
+            #action = choose_action(state)
+            #print("action: "+ str(action))
+            
             if action == 0:
-                STS = max(15, STS - 2)  # Decrease STS by 2, ensuring it doesn't go below 1
+                STS = max(16, STS - 2) 
                 #STS = STS
                 #print("STS: "+ str(STS))
             elif action == 1:
-                STS = max(15, STS - 1)  # Decrease STS by 1, ensuring it doesn't go below 1
+                STS = max(16, STS - 1)  
                 #STS = STS
                 #print("STS: "+ str(STS))
             elif action == 2:
-                STS = STS  # Keep STS unchanged
+                STS = STS
                 #print("STS: "+ str(STS))
             elif action == 3:
-                STS = min(32, STS + 1)  # Increase STS by 1, ensuring it doesn't exceed 32
+                STS = min(32, STS + 1) 
                 #STS = STS
                 #print("STS: "+ str(STS))
             else:
-                STS = min(32, STS + 2)  # Increase STS by 2, ensuring it doesn't exceed 32 
+                STS = min(32, STS + 2)  
                 #STS = STS   
-                #print("STS: "+ str(STS))    
+                #print("STS: "+ str(STS)) 
+   
+            #print("STS: "+ str(STS))   
             AP.update_STS(STS)
             
+            bi += 1
+            #print("BI: " + str(bi) )
 
-            if not AP.all_stations_paired():
-                #print("Not all stations are paired. Starting next BI process.")
-                
-                AP.next_bi()
-                f_time = time.time()  # 시간을 할당하는 부분 추가
-                time_difference = f_time - s_time
-                #print(f"Time spent in this BI: {time_difference:.3f} seconds")  # Add this line to print the time for each BI
-                s_time += time_difference
-                reward = get_reward(AP,successful_ssw_count, STS, time_difference)  # Pass the prev_STS variable
+            if(previous_STS != STS):
+                reward = get_reward(AP,successful_ssw_count, STS, bi)  # Pass the prev_STS variable
                 reward_file.write(f"{reward:.3f}\n")
                 next_state = get_new_state(AP)
                 memory_buffer.push(state, action, reward, next_state)
-                successful_ssw_count = 0
-               
-        
                 if len(memory_buffer) >= batch_size:
                     batch = memory_buffer.sample(batch_size)
-                    update_actor_critic_batch(batch, critic_optimizer, actor_optimizer)
+                    update_actor_critic_batch(batch, critic_optimizer, actor_optimizer) 
+
+            if not AP.all_stations_paired():
+                #print("Not all stations are paired. Starting next BI process."
+                successful_ssw_count = 0
+                AP.next_bi()
+               
                 
             
         end_time = time.time()

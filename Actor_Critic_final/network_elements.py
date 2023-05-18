@@ -9,7 +9,7 @@ class AccessPoint:
     def __init__(self, num_stations, STS, min_distance=10, max_distance=100):
         self.num_stations = num_stations
         self.STS = STS
-        self.num_sector = [i for i in range(0, 7)]
+        self.num_sector = [i for i in range(0, 6)]
         self.total_STS_used = 0
 
         self.ssw_list = []
@@ -46,16 +46,18 @@ class AccessPoint:
         received_signals = []
         sts_counter = [0] * self.STS
         speed_of_light = 3e8
-
-        for i in range(self.STS):
-            for station in self.stations:
-                if not station.pair and sector == station.tx_sector_AP:
+        sent_stations = set()
+        
+        for station in self.stations:
+            for i in range(self.STS):
+                if not station.pair and sector == station.tx_sector_AP and station not in sent_stations:
                     signal = station.send_ssw(i, sector)
                     if signal is not None:
                         distance = station.position
                         time = distance / speed_of_light
                         received_signals.append((i, signal, station, time))
                         sts_counter[i] += 1
+                        sent_stations.add(station)
 
         
         self.handle_received_signals(received_signals, sts_counter)
@@ -81,6 +83,7 @@ class AccessPoint:
 
 
     def next_bi(self):
+        self.ssw_list = []
         self.start_beamforming_training()
         
 
@@ -162,8 +165,6 @@ def calculate_state_variables(STS, AP):
     min_delay = min(received_times) if len(received_times) > 0 else 0  # or any other default value
 
     max_delay = max(received_times) if len(received_times) > 0 else 0  # or any other default value
-
-
 
     th_max = 0
     th = 0
@@ -254,7 +255,7 @@ def SNR_AP(station_id, distance):
     max_signal_level = 100 
     min_signal_level = 40 
     # 무작위 신호 레벨 개수
-    num_signal_levels = 7
+    num_signal_levels = 6
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level - PL_d, max_signal_level - PL_d, num_signal_levels)
     random_signal_levels = np.around(random_signal_levels, 4)

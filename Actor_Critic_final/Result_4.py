@@ -15,7 +15,7 @@ total_sts_algo2 = np.genfromtxt('total_STS_original.txt')
 episode_numbers = np.arange(1, len(total_sts_algo1) + 1)
 
 
-bin_size = 100
+bin_size = 1000
 
 total_sts_avg_algo1 = np.mean(total_sts_algo1.reshape(-1, bin_size), axis=1)
 total_sts_avg_algo2 = np.mean(total_sts_algo2.reshape(-1, bin_size), axis=1)
