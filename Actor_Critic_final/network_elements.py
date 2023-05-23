@@ -8,16 +8,17 @@ import math
 class AccessPoint:
     def __init__(self, num_stations, STS, min_distance=10, max_distance=100):
         self.num_stations = num_stations
-        self.STS = STS
-        self.num_sector = [i for i in range(0, 6)]
+        
+        self.num_sector = [i for i in range(0,6)]
+        self.STS = [STS[sector] for sector in self.num_sector]
         self.total_STS_used = 0
+        self.sector_states = [[0] * 3 for _ in range(len(self.num_sector))]
 
-        self.ssw_list = []
-        self.previous_u = 0
+        self.ssw_list = [[] for _ in range(len(self.num_sector))] 
+        self.previous_u = [0] * len(self.num_sector)
         self.collisions = 0
         self.successful_ssw_count = 0
 
-    
         self.min_distance = min_distance
         self.max_distance = max_distance
         station_positions = np.linspace(self.min_distance, self.max_distance, num_stations)
@@ -25,18 +26,22 @@ class AccessPoint:
 
        
 
-    def update_STS(self, new_STS):
-            self.STS = new_STS
+    def update_STS(self, sector_index, new_STS):
+            #self.STS = new_STS
+            self.STS[sector_index] = new_STS
+
 
     def start_beamforming_training(self):
-    
         unconnected_stations = [station for station in self.stations if not station.pair]
-        
-        for station in unconnected_stations:
+
+        for station_index, station in enumerate(unconnected_stations):
             beacon_frame = self.create_beacon_frame_with_trn_r(station)
             station.receive_bti(beacon_frame)
             station.receive_trn_r(beacon_frame)
-            station.backoff_count = random.randint(0, self.STS)  # backoff_count 재설정            
+            station.backoff_count = random.randint(0, self.STS[station_index % len(self.STS)])  # backoff_count 재설정
+
+       
+
 
     def create_beacon_frame_with_trn_r(self, station):
         return {'SNR': SNR_AP(station.id, station.position), 'trn_r': 'TRN-R data'}
@@ -44,12 +49,12 @@ class AccessPoint:
 
     def receive(self, sector):
         received_signals = []
-        sts_counter = [0] * self.STS
+        sts_counter = [0] * len(self.STS)
         speed_of_light = 3e8
         sent_stations = set()
-        
+
         for station in self.stations:
-            for i in range(self.STS):
+            for i in range(len(self.STS)):
                 if not station.pair and sector == station.tx_sector_AP and station not in sent_stations:
                     signal = station.send_ssw(i, sector)
                     if signal is not None:
@@ -59,40 +64,43 @@ class AccessPoint:
                         sts_counter[i] += 1
                         sent_stations.add(station)
 
-        
-        self.handle_received_signals(received_signals, sts_counter)
-        
-    def handle_received_signals(self, received_signals, sts_counter):
+        self.handle_received_signals(received_signals, sts_counter, sector)  # Pass the sector information
+
+
+    def handle_received_signals(self, received_signals, sts_counter, sector):
         collisions = [count > 1 for count in sts_counter]
         num_collisions = sum(collisions)
         self.collisions += num_collisions
 
+        print(f"Sector: {sector}")
+        print(f"Length of self.ssw_list: {len(self.ssw_list)}")
+
         for sts, signal, station, time in received_signals:
             if not collisions[sts]:
-                self.ssw_list.append((station.id, signal, time))
-                #print(f"Station {station.id} transmitted SSW frame successfully")    
-            #else:
-                #print(f"Station {station.id} transmitted SSW frame, but it collided")
+                self.ssw_list[sector].append((station.id, signal, time))  # Store the signal in the sector-specific list
+                print(f"Station {station.id} transmitted SSW frame successfully")
+            else:
+                print(f"Station {station.id} transmitted SSW frame, but it collided")
 
-    
 
     def broadcast_ack(self):
-        for station_id, _, time in self.ssw_list:  # Use index 0 to get the station ID from the tuple
-            ack_frame = f"ACK_DATA_{station_id}"
-            self.stations[int(station_id)].receive_ack_frame(ack_frame)
+        for sector_list in self.ssw_list:
+            for station_id, _, time in sector_list:
+                ack_frame = f"ACK_DATA_{station_id}"
+                self.stations[int(station_id)].receive_ack_frame(ack_frame)
 
 
     def next_bi(self):
-        self.ssw_list = []
+        for sector_list in self.ssw_list:
+            sector_list.clear()
         self.start_beamforming_training()
         
 
           
-
     def all_stations_paired(self):
         unpaired_stations = [station for station in self.stations if not station.pair]
         if unpaired_stations:
-            #print(f"Unpaired stations: {[station.id for station in unpaired_stations]}")
+            print(f"Unpaired stations: {[station.id for station in unpaired_stations]}")
             return False
         else:
             return True
@@ -112,7 +120,7 @@ class Station:
         self.tx_sector_AP = None
         self.rx_sector = None
         self.data_success = False
-        self.backoff_count = random.randint(0, STS-1)
+        self.backoff_count = random.randint(0, STS[id % len(STS)] - 1)
         self.attempts = 0
 
 
@@ -129,7 +137,7 @@ class Station:
     def receive_trn_r(self,beacon_frame):
         best_rx_sector = self.get_best_rx_sector()
         self.rx_sector = best_rx_sector  # rx_sector에 할당하는 부분 추가
-        #print(f"Station {self.id}: Best RX sector of STA after TRN-R - {best_rx_sector}")
+        print(f"Station {self.id}: Best RX sector of STA after TRN-R - {best_rx_sector}")
 
     def get_best_rx_sector(self):
         snr_values = SNR_STA()
@@ -138,7 +146,7 @@ class Station:
 
     
     def send_ssw(self, STS, sector):
-        if not self.pair and STS == self.backoff_count and self.tx_sector_AP == sector:
+        if not self.pair and  STS == self.backoff_count and self.tx_sector_AP == sector:
             self.rx_sector = None
             self.data_success = True
             self.attempts += 1
@@ -151,73 +159,61 @@ class Station:
         if not self.pair:
             if self.data_success and ack_frame == expected_ack_frame:
                 self.pair = True
-                #print(f"Station {self.id} received ACK successfully")
-            #else:
-                #print(f"Station {self.id} did not receive ACK, will retry in the next BI")
-        #else:
-            #print(f"Station {self.id} is already paired")
+                print(f"Station {self.id} received ACK successfully")
+            else:
+                print(f"Station {self.id} did not receive ACK, will retry in the next BI")
+        else:
+            print(f"Station {self.id} is already paired")
 
 
-def calculate_state_variables(STS, AP):
-    # Calculate delay
-    received_times = [time for _, _, time in AP.ssw_list]
-    
-    min_delay = min(received_times) if len(received_times) > 0 else 0  # or any other default value
+def calculate_state_variables(STS, AP, sector_index):
+    received_times = [time for _, _, time in AP.ssw_list[sector_index]]  # Use the sector-specific ssw_list
 
-    max_delay = max(received_times) if len(received_times) > 0 else 0  # or any other default value
+    min_delay = min(received_times) if len(received_times) > 0 else 0
+    max_delay = max(received_times) if len(received_times) > 0 else 0
 
     th_max = 0
     th = 0
-    for (station_id, ssw, time) in AP.ssw_list:
-        station = AP.stations[int(station_id)]
-        snr = station.snr_values
-      
+    for _, ssw, time in AP.ssw_list[sector_index]:
+        snr = ssw  # Assuming ssw should be replaced with snr
         if max_delay == min_delay:
-                delay_norm = 0
-            
+            delay_norm = 0
         else:
             delay_norm = (time - min_delay) / (max_delay - min_delay)
-       
-    
         weight = 1 - delay_norm
         th += weight * snr
-      
-        w_max = 1  #no path loss 
-        th_max += w_max * snr  # Assuming that ssw should be replaced with snr
+        w_max = 1  # Assuming no path loss
+        th_max += w_max * snr
 
     if th_max == 0:
-        #print("Warning: th_max is zero, defaulting C_k to 0")
         C_k = 1
     else:
-        C_k = (th_max - th) / th_max  # Replacing sigmoid function with original equation
+        C_k = (th_max - th) / th_max
 
-    # Calculate STS usage
-    N_ack = sum([station.data_success for station in AP.stations])
-    U_current = N_ack / (STS*len(AP.num_sector))
-    U_previous = AP.previous_u
+    N_ack = sum([station.data_success for station in AP.stations if station.tx_sector_AP == sector_index])
+
+    U_current = N_ack / (STS[sector_index] * len(AP.num_sector))
+    U_previous = AP.previous_u[sector_index]
     delta_U = U_current - U_previous
 
-    # Calculate minimum and maximum possible values of delta_U
     delta_U_min = -U_previous
-    delta_U_max = (AP.num_stations - N_ack) / STS * len(AP.num_sector) - U_previous
+    delta_U_max = (len(AP.stations) - N_ack) / (STS[sector_index] * len(AP.num_sector)) - U_previous
 
     if delta_U_max != delta_U_min:
         delta_U_norm = (delta_U - delta_U_min) / (delta_U_max - delta_U_min)
-        # Make sure delta_U_norm is between 0 and 1
         delta_U_norm = max(0, min(1, delta_U_norm))
     else:
         delta_U_norm = 0
 
-    AP.previous_u = U_current
+    AP.previous_u[sector_index] = U_current
 
-    # Calculate energy consumption
     P_rx = 10
     T_rx = max_delay
     P_idle = 1
     T_idle = min_delay
 
-    N_rx = sum([station.data_success for station in AP.stations])
-    N_idle = (STS*len(AP.num_sector)) - N_rx
+    N_rx = sum([station.data_success for station in AP.stations if station.tx_sector_AP == sector_index])
+    N_idle = (STS[sector_index] * len(AP.num_sector)) - N_rx
 
     E_rx = P_rx * T_rx
     E_idle = P_idle * T_idle
@@ -225,8 +221,7 @@ def calculate_state_variables(STS, AP):
 
     E = 1 / (1 + np.exp(-(E_t)))
 
-    return STS, C_k, delta_U_norm, E
-
+    return STS[sector_index], C_k, delta_U_norm, E
 
 
 def SNR_STA():

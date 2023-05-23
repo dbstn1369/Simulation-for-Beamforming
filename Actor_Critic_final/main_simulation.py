@@ -12,10 +12,9 @@ import random
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
-STS = 32
 
 num_states = 3
-num_actions = 5
+num_actions = 2
 actor_lr = 0.0001
 critic_lr = 0.0005
 discount_factor = 0.95
@@ -32,10 +31,10 @@ memory_buffer = MemoryBuffer(memory_buffer_capacity)
 
 
 
-def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_decay=2000):
-#def choose_action(state):
-    epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
-    #epsilon = 0.1
+#def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_decay=2000):
+def choose_action(state):
+    #epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
+    epsilon = 0.1
     state_tensor = torch.FloatTensor(state).unsqueeze(0).to(device)
     with torch.no_grad():
         action_probs = actor(state_tensor)
@@ -58,7 +57,7 @@ def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
     actions_tensor = torch.LongTensor(actions).to(device)
     rewards_tensor = torch.FloatTensor(rewards).to(device)
 
-    values = critic(states_tensor).expand(-1, 32)
+    values = critic(states_tensor)
     next_values = critic(next_states_tensor).detach()
     target_values = rewards_tensor + discount_factor * next_values
 
@@ -67,27 +66,28 @@ def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
     critic_loss.backward()
     critic_optimizer.step()
 
-    action_probs = actor(states_tensor).squeeze(1)
-    selected_action_probs = action_probs.gather(1, actions_tensor.unsqueeze(1)).squeeze()
+    action_probs = actor(states_tensor)
+    selected_action_probs = action_probs.gather(1, actions_tensor.unsqueeze(1).unsqueeze(2)).squeeze(1).squeeze(1)
     advantages = (target_values - values).detach()
 
     actor_loss = -torch.log(selected_action_probs) * advantages
-    actor_loss = torch.mean(actor_loss)  # Add this line to calculate the mean of the actor loss
+    actor_loss = torch.mean(actor_loss)
     actor_optimizer.zero_grad()
     actor_loss.backward()
     actor_optimizer.step()
-    
+    print('action_probs shape:', action_probs.shape)
+    print('actions_tensor shape:', actions_tensor.shape)
 
 
-def get_reward(AP, successful_ssw_count, STS, bi):
-    c1, c2, c3, c4 = 1, 10, 1, 2
+def get_reward(AP, successful_ssw_count, STS, bi, i):
+    c1, c2, c3, c4 = 0.5, 0.5, 0.01, 0.01
     
     U = successful_ssw_count / (STS * len(AP.num_sector)) 
     T_max = 32*len(AP.num_sector)
     T_min = 1*len(AP.num_sector)
     T_m = ((STS*len(AP.num_sector)) - T_min) / (T_max - T_min) 
  
-    STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
+    STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, AP, i)  # calculate_state_variables 함수 호출시 인자값 추가
     #print(f"-> {U, E, bi, T_m}")
      
     reward = 1 / (1 + math.exp(-((c1 * U + c2 * E) - (c3 * bi + c4 * T_m))))
@@ -101,15 +101,16 @@ def get_reward(AP, successful_ssw_count, STS, bi):
 
 def get_new_state(AP):
 
-    sts_count, Cog, delta_u_norm, E = calculate_state_variables(AP.STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
-
-    return [sts_count, Cog, delta_u_norm]
+    for i in range(len(AP.num_sector)):
+        sts_count, Cog, delta_u_norm, E = calculate_state_variables(AP.STS, AP, i)  # calculate_state_variables 함수 호출시 인자값 추가
+        AP.sector_states[i] = [sts_count, Cog, delta_u_norm]
+    return AP.sector_states
 
 
 
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file, open('Reward.txt', 'a') as reward_file:
     for episode in range(2000):
-        AP = AccessPoint(num_stations=300, STS=STS)
+        AP = AccessPoint(num_stations=300, STS=[32, 32, 32, 32, 32, 32])
         
         connected_stations = []
         total_time = 0
@@ -130,55 +131,44 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                 AP.receive(i)
                  
             successful_ssw_count = len(AP.ssw_list)
-            #print("swc:" + str(successful_ssw_count))
             AP.broadcast_ack()
 
-            AP.total_STS_used += STS * len(AP.num_sector)
-                        
-            state = get_new_state(AP)
-            previous_STS = STS
+           
+            states = get_new_state(AP)
+            actions = []
             
-            action = choose_action(state, episode)
-            #action = choose_action(state)
-            #print("action: "+ str(action))
             
-            if action == 4:
-                #STS = max(16, STS - 3) 
-                STS = STS
-                #print("STS: "+ str(STS))
-            elif action == 3:
-                #STS = max(16, STS - 1)  
-                STS = STS
-                #print("STS: "+ str(STS))
-            elif action == 2:
-                STS = STS
-                #print("STS: "+ str(STS))
-            elif action == 1:
-                #STS = min(32, STS + 1) 
-                STS = STS
-                #print("STS: "+ str(STS))
+            action = choose_action(states[i])
+            actions.append(action)
+
+            
+            if action == 1:
+                new_STS = max(16, AP.STS[i] - 1) 
+                #new_STS = STS   
+                print("STS: "+ str(new_STS)) 
             else:
-                #STS = min(32, STS + 3)  
-                STS = STS   
-                #print("STS: "+ str(STS)) 
+                new_STS = min(32, AP.STS[i] + 1)  
+                #new_STS = STS   
+                print("STS: "+ str(new_STS)) 
    
-            print("STS: "+ str(STS))   
-            AP.update_STS(STS)
+            AP.update_STS(i, new_STS)
+
+            AP.total_STS_used += new_STS * len(AP.num_sector)
             
             bi += 1
-            #print("BI: " + str(bi) )
+            print("BI: " + str(bi) )
 
             #if(previous_STS != STS):
-            reward = get_reward(AP,successful_ssw_count, STS, bi)  # Pass the prev_STS variable
+            reward = get_reward(AP,successful_ssw_count, new_STS, bi, i)  # Pass the prev_STS variable
             reward_file.write(f"{reward:.3f}\n")
             next_state = get_new_state(AP)
-            memory_buffer.push(state, action, reward, next_state)
+            memory_buffer.push(states, action, reward, next_state)
             if len(memory_buffer) >= batch_size:
                 batch = memory_buffer.sample(batch_size)
                 update_actor_critic_batch(batch, critic_optimizer, actor_optimizer) 
 
             if not AP.all_stations_paired():
-                #print("Not all stations are paired. Starting next BI process."
+                print("Not all stations are paired. Starting next BI process.")
                 successful_ssw_count = 0
                 AP.next_bi()
                
