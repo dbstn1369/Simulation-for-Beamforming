@@ -16,8 +16,8 @@ STS = 32
 
 num_states = 3
 num_actions = 5
-actor_lr = 0.001
-critic_lr = 0.005
+actor_lr = 0.0001
+critic_lr = 0.0005
 discount_factor = 0.95
 
 
@@ -32,7 +32,7 @@ memory_buffer = MemoryBuffer(memory_buffer_capacity)
 
 
 
-def choose_action(state, episode, epsilon_start=0.3, epsilon_end=0.01, epsilon_decay=10000):
+def choose_action(state, episode, epsilon_start=0.1, epsilon_end=0.01, epsilon_decay=2000):
 #def choose_action(state):
     epsilon = epsilon_end + (epsilon_start - epsilon_end) * math.exp(-1.0 * episode / epsilon_decay)
     #epsilon = 0.1
@@ -80,7 +80,7 @@ def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
 
 
 def get_reward(AP, successful_ssw_count, STS, bi):
-    c1, c2, c3, c4 = 1, 2.5, 1, 2
+    c1, c2, c3, c4 = 1, 10, 1, 2
     
     U = successful_ssw_count / (STS * len(AP.num_sector)) 
     T_max = 32*len(AP.num_sector)
@@ -88,12 +88,12 @@ def get_reward(AP, successful_ssw_count, STS, bi):
     T_m = ((STS*len(AP.num_sector)) - T_min) / (T_max - T_min) 
  
     STS, C_k, delta_u_norm, E = calculate_state_variables(AP.STS, AP)  # calculate_state_variables 함수 호출시 인자값 추가
-    #print(f"-> {U, delta_u_norm, E, C_k, T_m}")
+    #print(f"-> {U, E, bi, T_m}")
      
     reward = 1 / (1 + math.exp(-((c1 * U + c2 * E) - (c3 * bi + c4 * T_m))))
-    #reward = (c1 * U + c2 * E) - (c3 * bi + c4 * T_m)
+
     
-    #print(f"reward: {reward}")
+    print(f"reward: {reward}")
     
     return reward
 
@@ -108,8 +108,8 @@ def get_new_state(AP):
 
 
 with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts_file, open('Reward.txt', 'a') as reward_file:
-    for episode in range(10000):
-        AP = AccessPoint(num_stations=500, STS=STS)
+    for episode in range(2000):
+        AP = AccessPoint(num_stations=300, STS=STS)
         
         connected_stations = []
         total_time = 0
@@ -142,40 +142,40 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
             #action = choose_action(state)
             #print("action: "+ str(action))
             
-            if action == 0:
-                STS = max(16, STS - 2) 
-                #STS = STS
+            if action == 4:
+                #STS = max(16, STS - 3) 
+                STS = STS
                 #print("STS: "+ str(STS))
-            elif action == 1:
-                STS = max(16, STS - 1)  
-                #STS = STS
+            elif action == 3:
+                #STS = max(16, STS - 1)  
+                STS = STS
                 #print("STS: "+ str(STS))
             elif action == 2:
                 STS = STS
                 #print("STS: "+ str(STS))
-            elif action == 3:
-                STS = min(32, STS + 1) 
-                #STS = STS
+            elif action == 1:
+                #STS = min(32, STS + 1) 
+                STS = STS
                 #print("STS: "+ str(STS))
             else:
-                STS = min(32, STS + 2)  
-                #STS = STS   
+                #STS = min(32, STS + 3)  
+                STS = STS   
                 #print("STS: "+ str(STS)) 
    
-            #print("STS: "+ str(STS))   
+            print("STS: "+ str(STS))   
             AP.update_STS(STS)
             
             bi += 1
             #print("BI: " + str(bi) )
 
-            if(previous_STS != STS):
-                reward = get_reward(AP,successful_ssw_count, STS, bi)  # Pass the prev_STS variable
-                reward_file.write(f"{reward:.3f}\n")
-                next_state = get_new_state(AP)
-                memory_buffer.push(state, action, reward, next_state)
-                if len(memory_buffer) >= batch_size:
-                    batch = memory_buffer.sample(batch_size)
-                    update_actor_critic_batch(batch, critic_optimizer, actor_optimizer) 
+            #if(previous_STS != STS):
+            reward = get_reward(AP,successful_ssw_count, STS, bi)  # Pass the prev_STS variable
+            reward_file.write(f"{reward:.3f}\n")
+            next_state = get_new_state(AP)
+            memory_buffer.push(state, action, reward, next_state)
+            if len(memory_buffer) >= batch_size:
+                batch = memory_buffer.sample(batch_size)
+                update_actor_critic_batch(batch, critic_optimizer, actor_optimizer) 
 
             if not AP.all_stations_paired():
                 #print("Not all stations are paired. Starting next BI process."
