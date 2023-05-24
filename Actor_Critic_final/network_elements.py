@@ -9,7 +9,7 @@ class AccessPoint:
     def __init__(self, num_stations, STS, min_distance=10, max_distance=100):
         self.num_stations = num_stations
         
-        self.num_sector = [i for i in range(0,6)]
+        self.num_sector = [i for i in range(0, 16)]
         self.STS = [STS[sector] for sector in self.num_sector]
         self.total_STS_used = 0
         self.sector_states = [[0] * 3 for _ in range(len(self.num_sector))]
@@ -27,7 +27,7 @@ class AccessPoint:
        
 
     def update_STS(self, sector_index, new_STS):
-            #self.STS = new_STS
+
             self.STS[sector_index] = new_STS
 
 
@@ -72,15 +72,15 @@ class AccessPoint:
         num_collisions = sum(collisions)
         self.collisions += num_collisions
 
-        print(f"Sector: {sector}")
-        print(f"Length of self.ssw_list: {len(self.ssw_list)}")
+        #print(f"Sector: {sector}")
+        #print(f"Length of self.ssw_list: {len(self.ssw_list)}")
 
         for sts, signal, station, time in received_signals:
             if not collisions[sts]:
                 self.ssw_list[sector].append((station.id, signal, time))  # Store the signal in the sector-specific list
-                print(f"Station {station.id} transmitted SSW frame successfully")
-            else:
-                print(f"Station {station.id} transmitted SSW frame, but it collided")
+                #print(f"Station {station.id} transmitted SSW frame successfully")
+            #else:
+                #print(f"Station {station.id} transmitted SSW frame, but it collided")
 
 
     def broadcast_ack(self):
@@ -100,7 +100,7 @@ class AccessPoint:
     def all_stations_paired(self):
         unpaired_stations = [station for station in self.stations if not station.pair]
         if unpaired_stations:
-            print(f"Unpaired stations: {[station.id for station in unpaired_stations]}")
+            #print(f"Unpaired stations: {[station.id for station in unpaired_stations]}")
             return False
         else:
             return True
@@ -120,13 +120,15 @@ class Station:
         self.tx_sector_AP = None
         self.rx_sector = None
         self.data_success = False
-        self.backoff_count = random.randint(0, STS[id % len(STS)] - 1)
+        self.backoff_count = None
         self.attempts = 0
 
 
     def receive_bti(self, beacon_frame):
         self.snr_values = np.max(beacon_frame['SNR'])
         self.tx_sector_AP = self.get_best_sectors(beacon_frame)
+        self.backoff_count = random.randint(0, self.AP.STS[self.tx_sector_AP] - 1)
+        #print(f"backoff of {self.id}: {self.backoff_count}")
         #print(f"Station {self.id}: Best TX sector of AP - {self.tx_sector_AP}")
 
     def get_best_sectors(self, beacon_frame):
@@ -137,7 +139,7 @@ class Station:
     def receive_trn_r(self,beacon_frame):
         best_rx_sector = self.get_best_rx_sector()
         self.rx_sector = best_rx_sector  # rx_sector에 할당하는 부분 추가
-        print(f"Station {self.id}: Best RX sector of STA after TRN-R - {best_rx_sector}")
+        #print(f"Station {self.id}: Best RX sector of STA after TRN-R - {best_rx_sector}")
 
     def get_best_rx_sector(self):
         snr_values = SNR_STA()
@@ -159,11 +161,11 @@ class Station:
         if not self.pair:
             if self.data_success and ack_frame == expected_ack_frame:
                 self.pair = True
-                print(f"Station {self.id} received ACK successfully")
-            else:
-                print(f"Station {self.id} did not receive ACK, will retry in the next BI")
-        else:
-            print(f"Station {self.id} is already paired")
+                #print(f"Station {self.id} received ACK successfully")
+            #else:
+                #print(f"Station {self.id} did not receive ACK, will retry in the next BI")
+        #else:
+           #print(f"Station {self.id} is already paired")
 
 
 def calculate_state_variables(STS, AP, sector_index):
@@ -250,7 +252,7 @@ def SNR_AP(station_id, distance):
     max_signal_level = 100 
     min_signal_level = 40 
     # 무작위 신호 레벨 개수
-    num_signal_levels = 6
+    num_signal_levels = 16
     # 무작위 신호 레벨 생성
     random_signal_levels = np.random.uniform(min_signal_level - PL_d, max_signal_level - PL_d, num_signal_levels)
     random_signal_levels = np.around(random_signal_levels, 4)
