@@ -9,7 +9,7 @@ mpl.rcParams['font.family'] = 'Times New Roman'
 
 total_sts_algo1 = np.genfromtxt('total_STS.txt')
 
-total_sts_algo2 = np.genfromtxt('total_STS_original.txt')
+total_sts_algo2 = np.genfromtxt('total_STS_Q.txt')
 
 # 에피소드 번호 생성 (1부터 시작)
 episode_numbers = np.arange(1, len(total_sts_algo1) + 1)
@@ -28,8 +28,8 @@ plt.style.use('classic')
 fig, ax1 = plt.subplots()
 
 # Plot the time data on the first y-axis
-ax1.plot(episode_numbers_avg, total_sts_avg_algo1, label='STS A_C', color='r', marker='s')
-ax1.plot(episode_numbers_avg, total_sts_avg_algo2, label='STS Ori', color='m', marker='^')
+ax1.plot(episode_numbers_avg, total_sts_avg_algo1, label='STS A-C', color='r', marker='s')
+ax1.plot(episode_numbers_avg, total_sts_avg_algo2, label='STS Q', color='m', marker='^')
 ax1.set_xlabel('Episode Number', fontsize=12)
 ax1.set_ylabel('Total STS', fontsize=12)
 
@@ -50,7 +50,7 @@ ax1.legend(lines1, labels1, fontsize=10)
 plt.title('Total STS per Episode for Two Algorithms', fontsize=14)
 
 # Save the plot as a high-quality image
-fig.savefig('Total STS per Episode for Two Algorithms', dpi=300)
+fig.savefig('Total STS per Episode for Two Algorithms(A-CvsQ)', dpi=300)
 
 
 plt.show()
