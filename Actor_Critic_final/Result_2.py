@@ -6,8 +6,8 @@ import matplotlib as mpl
 mpl.rcParams['font.family'] = 'Times New Roman'
 
 # 텍스트 파일에서 데이터 읽기
-total_times = np.genfromtxt('total_time.txt')
-total_sts = np.genfromtxt('total_STS.txt')
+total_times = np.genfromtxt('total_time_original.txt')
+total_sts = np.genfromtxt('total_STS_original.txt')
 
 # 에피소드 번호 생성 (1부터 시작)
 episode_numbers = np.arange(1, len(total_times) + 1)
@@ -60,7 +60,7 @@ ax1.legend(lines1 + lines2, labels1 + labels2, fontsize=10)
 plt.title('Time and Total STS per Episode', fontsize=14)
 
 # Save the plot as a high-quality image
-fig.savefig('time_and_total_sts_per_episode_averaged.png', dpi=300)
+fig.savefig('time_and_total_sts_per_episode_averaged(original).png', dpi=300)
 
 # Show the plot
 plt.show()

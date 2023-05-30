@@ -18,8 +18,8 @@ print(device)
 
 num_states = 3
 num_actions = 16
-actor_lr = 0.0001
-critic_lr = 0.0005
+actor_lr = 0.001
+critic_lr = 0.005
 discount_factor = 0.95
 
 
@@ -53,50 +53,53 @@ def choose_action(state):
     return action
 
 
+# def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
+#     states, actions, rewards, next_states = zip(*batch)
+
+#     states_tensor = torch.FloatTensor(states).to(device)
+#     next_states_tensor = torch.FloatTensor(next_states).to(device)
+#     actions_tensor = torch.LongTensor(actions).unsqueeze(-1).to(device)
+#     actions_tensor = actions_tensor.unsqueeze(1).expand(-1, 1, num_actions)  # 크기를 (batch_size, 1, num_actions)로 확장
+#     rewards_tensor = torch.FloatTensor(rewards).unsqueeze(-1).to(device)
+    
+
+#     values = critic(states_tensor)
+#     next_values = critic(next_states_tensor).detach()
+    
+#     rewards_tensor_expanded = rewards_tensor.unsqueeze(1).expand(-1, 1, next_values.size(-1))
+
+#     #print('rewards_tensor_expanded shape:', rewards_tensor_expanded.shape)
+
+#     target_values = rewards_tensor_expanded + discount_factor * next_values
+
+#     critic_loss = nn.MSELoss()(values, target_values)
+#     critic_optimizer.zero_grad()
+#     critic_loss.backward()
+#     critic_optimizer.step()
+
+#     action_probs = actor(states_tensor)
+
+#     #print('action_probs shape:', action_probs.shape)
+#     #print('actions_tensor shape:', actions_tensor.shape)
+
+
+#     selected_action_probs = action_probs.gather(2, actions_tensor).squeeze(2)
+
+#     advantages = (target_values - values).detach()
+
+#     actor_loss = -torch.log(selected_action_probs) * advantages
+#     actor_loss = torch.mean(actor_loss)
+#     actor_optimizer.zero_grad()
+#     actor_loss.backward()
+#     actor_optimizer.step()
+
+
 def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
-    states, actions, rewards, next_states = zip(*batch)
-
-    states_tensor = torch.FloatTensor(states).to(device)
-    next_states_tensor = torch.FloatTensor(next_states).to(device)
-    actions_tensor = torch.LongTensor(actions).unsqueeze(-1).to(device)
-    actions_tensor = actions_tensor.unsqueeze(1).expand(-1, 1, num_actions)  # 크기를 (batch_size, 1, num_actions)로 확장
-    rewards_tensor = torch.FloatTensor(rewards).unsqueeze(-1).to(device)
-    
-
-    values = critic(states_tensor)
-    next_values = critic(next_states_tensor).detach()
-    
-    rewards_tensor_expanded = rewards_tensor.unsqueeze(1).expand(-1, 1, next_values.size(-1))
-
-    #print('rewards_tensor_expanded shape:', rewards_tensor_expanded.shape)
-
-    target_values = rewards_tensor_expanded + discount_factor * next_values
-
-    critic_loss = nn.MSELoss()(values, target_values)
-    critic_optimizer.zero_grad()
-    critic_loss.backward()
-    critic_optimizer.step()
-
-    action_probs = actor(states_tensor)
-
-    #print('action_probs shape:', action_probs.shape)
-    #print('actions_tensor shape:', actions_tensor.shape)
-
-
-    selected_action_probs = action_probs.gather(2, actions_tensor).squeeze(2)
-
-    advantages = (target_values - values).detach()
-
-    actor_loss = -torch.log(selected_action_probs) * advantages
-    actor_loss = torch.mean(actor_loss)
-    actor_optimizer.zero_grad()
-    actor_loss.backward()
-    actor_optimizer.step()
-
+    return
 
 
 def get_reward(AP, successful_ssw_count, STS, bi, i):
-    c1, c2, c3, c4, c5 = 0.5, 1, 0.1, 0.7, 0.1
+    c1, c2, c3, c4, c5 = 1, 1, 0.1, 1, 0.1
 
     U = successful_ssw_count / (STS) 
     T_max = 32
@@ -108,12 +111,12 @@ def get_reward(AP, successful_ssw_count, STS, bi, i):
 
     # Add penalty for extreme STS values
     if STS <= 16 or STS >= 32:
-        penalty = -c5
+        penalty = c5
         #print(f"penalty: {penalty}")
     else:
         penalty = 0
 
-    reward = 1 / (1 + math.exp(-((c1 * U + c2 * E + penalty) - (c3 * bi + c4 * T_m))))
+    reward = 1 / (1 + math.exp(-((c1 * U + c2 * E) - (c3 * bi + c4 * T_m + penalty))))
     #print(f"reward: {reward}")
     
     return reward
@@ -133,10 +136,11 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
     for episode in range(1000):
        
         STS = [32] * 16
-        AP = AccessPoint(num_stations=300, STS=STS)
+        AP = AccessPoint(num_stations=500, STS=STS)
         
         connected_stations = []
         total_time = 0
+        learning_time = 0
         successful_ssw_count = 0
         bi = 0
         start_time = time.time()
@@ -158,11 +162,10 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
 
             
                 states = get_new_state(AP)
-                actions = []
                 
-                
-                new_STS = choose_action(states[i])  # Action is now an STS value
-                actions.append(new_STS)
+                  
+                #new_STS = choose_action(states[i])  # Action is now an STS value
+                new_STS = 32 
 
                 #print(f"Sector: {i}")  
                 #print("STS: "+ str(new_STS)) 
@@ -176,9 +179,13 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                 successful_ssw_count = 0
                 next_state = get_new_state(AP)
                 memory_buffer.push(states, new_STS-16, reward, next_state)
+                learning_start = time.time()
                 if len(memory_buffer) >= batch_size:
                     batch = memory_buffer.sample(batch_size)
-                    update_actor_critic_batch(batch, critic_optimizer, actor_optimizer) 
+                    learning_start = time.time()
+                    update_actor_critic_batch(batch, critic_optimizer, actor_optimizer)
+                    learning_end = time.time()  # End timing learning
+                    learning_time += learning_end - learning_start  # Increment total learning time 
 
             if not AP.all_stations_paired():
                 #print("Not all stations are paired. Starting next BI process.")
@@ -188,7 +195,7 @@ with open('total_time.txt', 'a') as time_file, open('total_STS.txt', 'a') as sts
                 
             
         end_time = time.time()
-        total_time = end_time - start_time
+        total_time = end_time - start_time - learning_time  # Subtract the learning time from the total time
         print(f"Episode: {episode}")
         print(f"Total_STS_used: {AP.total_STS_used}")
             
