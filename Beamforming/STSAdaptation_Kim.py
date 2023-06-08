@@ -26,7 +26,12 @@ exploration_rate_decay = 0.001
 def choose_action(state, sector_STS):
     state = torch.as_tensor(state, dtype=torch.int64, device=device)
     sector_STS = torch.as_tensor(sector_STS, dtype=torch.int64, device=device)
+    print(f"State: {state}")
+    print(f"Sector_STS: {sector_STS}")
+    print(f"Q-Table shape: {q_table.shape}")
 
+    assert torch.all(sector_STS < num_sectors), "sector_STS contains invalid sector index"
+    
     if torch.rand(1).item() < exploration_rate:
         return torch.randint(num_actions, (1,), device=device, dtype=torch.int64).item()
     else:
@@ -36,9 +41,6 @@ def choose_action(state, sector_STS):
         max_indices = np.where(q_values_numpy == q_values_numpy.max())[0]
         selected_index = np.random.choice(max_indices)
         return selected_index.item()
-
-
-
 
 
 
@@ -60,9 +62,6 @@ def update_q_table(state, action, reward, next_state, sector_STS, next_sector_ST
         print(f"Ignoring invalid next_state: {next_state} or next_sector_STS: {next_sector_STS}")
 
 
-
-
- 
 def get_reward(successful_ssw_count, total_ssw_count):
     if total_ssw_count == 0:
         return 0

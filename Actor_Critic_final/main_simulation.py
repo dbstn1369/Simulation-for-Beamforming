@@ -130,7 +130,7 @@ def get_new_state(AP):
 
 
 
-with open('total_time_O.txt', 'a') as time_file, open('total_STS_O.txt', 'a') as sts_file, open('Reward_O.txt', 'a') as reward_file:
+with open('total_time_AC.txt', 'a') as time_file, open('total_STS_AC.txt', 'a') as sts_file, open('Reward_AC.txt', 'a') as reward_file:
     for episode in range(10000):
        
         STS = [32] * 16
