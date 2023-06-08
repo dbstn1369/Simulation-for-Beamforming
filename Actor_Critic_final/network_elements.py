@@ -221,7 +221,7 @@ def calculate_state_variables(STS, AP, sector_index):
     E_idle = P_idle * T_idle
     E_t = E_rx * N_rx + E_idle * N_idle
 
-    E = 1 / (1 + np.exp(-(E_t)))
+    E = 1 - ( 1 / (1 + np.exp(-(E_t))) )
 
     return STS[sector_index], C_k, delta_U_norm, E
 

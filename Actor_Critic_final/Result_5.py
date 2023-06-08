@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
 # 이미지 파일 경로
-img_path1 = 'Time per Episode for Two Algorithms(100).png'
-img_path2 = 'Total STS per Episode for Two Algorithms(100).png'
+img_path1 = 'Time per Episode for Three Algorithms.png'
+img_path2 = 'Total STS per Episode for Three Algorithms.png'
 
 # 이미지 파일 불러오기
 img1 = mpimg.imread(img_path1)

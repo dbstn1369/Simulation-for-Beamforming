@@ -163,10 +163,10 @@ with open('total_time_O.txt', 'a') as time_file, open('total_STS_O.txt', 'a') as
                 states = get_new_state(AP)
                 
                   
-                #new_STS = choose_action(states[i], successful_ssw_count, bi, i, episode)
+                new_STS = choose_action(states[i], successful_ssw_count, bi, i, episode)
 
 
-                new_STS = 32 
+                #new_STS = 32 
 
                 #print(f"Sector: {i}")  
                 #print("STS: "+ str(new_STS)) 

@@ -226,12 +226,13 @@ class Station:
 
 total_STS_used = 0
 with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as sts_file:
-    for episode in range(1000):
+    for episode in range(10000):
         STS = [32] * 16
         AP = AccessPoint(num_stations=500, num_sector=num_sectors, STS=STS)
         connected_stations = 0
         total_time = 0
         total_STS_used = 0
+        learning_time = 0
         start_time = time.time()
 
         AP.start_beamforming_training()
@@ -260,6 +261,7 @@ with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as
                 successful_ssw_count += successful_ssw_count_sector
 
             AP.broadcast_ack()
+            learning_start = time.time()
 
             print("Paired stations:")
             for station in AP.stations:
@@ -275,11 +277,14 @@ with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as
 
                 next_sector_STS = AP.STS[:]
                 update_q_table(state, action, reward, next_state, sector_STS, next_sector_STS)
+                learning_end = time.time()  # End timing learning
+                learning_time += learning_end - learning_start  # Increment total learning time 
+
 
                 AP.next_bi()
 
         end_time = time.time()
-        total_time = end_time - start_time
+        total_time = end_time - start_time - learning_time
         print(f"EPISODE: {episode} All stations are paired. Simulation complete.")
         print(f"Total simulation time: {total_time:.3f} seconds")
         time_file.write(f"{total_time:.3f}\n")
