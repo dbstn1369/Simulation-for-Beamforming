@@ -4,50 +4,66 @@ import matplotlib as mpl
 
 mpl.rcParams['font.family'] = 'Times New Roman'
 
-# 텍스트 파일에서 데이터 읽기
-total_sts_algo1 = np.genfromtxt('total_STS.txt')
-total_sts_algo2 = np.genfromtxt('total_STS_Q.txt')
-total_sts_algo3 = np.genfromtxt('total_STS_O.txt')  # New data
+# Define the N_sta values, STS values, and the algorithm names
+n_sta_values = [500, 500, 500, 500]
+sts_values = [32, 32, 32, 32]
+algorithms = ['Actor-Critic', 'Q-learning', 'Original']
 
-# 에피소드 번호 생성 (1부터 시작)
-episode_numbers = np.arange(1, len(total_sts_algo1) + 1)
+# Bar width and colors
+bar_width = 0.15
+colors = ['#ff5733', '#33ff57', '#3357ff']
 
-bin_size = 100
+# Assume the energy per slot
+energy_per_slot = 0.001  # e.g., 0.001 Joules
 
-total_sts_avg_algo1 = np.mean(total_sts_algo1.reshape(-1, bin_size), axis=1)
-total_sts_avg_algo2 = np.mean(total_sts_algo2.reshape(-1, bin_size), axis=1)
-total_sts_avg_algo3 = np.mean(total_sts_algo3.reshape(-1, bin_size), axis=1)  # New average
+# Additional energy cost per STA
+additional_energy_per_sta = 0.005  # e.g., 0.0005 Joules
 
-episode_numbers_avg = np.arange(1, len(total_sts_avg_algo1) + 1) * bin_size
+# Create a figure and axes
+fig, axs = plt.subplots(1, len(sts_values), figsize=(4 * len(sts_values), 6), sharey=True)
 
-# Set the plot style to 'classic' for a more suitable style for IEEE papers
-plt.style.use('classic')
+for ax_index, sts in enumerate(sts_values):
+    # Position of the left bar boundaries
+    bar_l = np.arange(len(n_sta_values))
 
-# Create the plot
-fig, ax1 = plt.subplots()
+    # Generate positions of the x-axis ticks
+    tick_pos = [i+(bar_width/2) for i in bar_l]
 
-# Plot the STS data
-ax1.plot(episode_numbers_avg, total_sts_avg_algo1, label='STS A-C', color='r', marker='s')
-ax1.plot(episode_numbers_avg, total_sts_avg_algo2, label='STS Q', color='m', marker='^')
-ax1.plot(episode_numbers_avg, total_sts_avg_algo3, label='STS O', color='b', marker='o')  # New plot
+    for algo_index, algo in enumerate(algorithms):
+        # Read the STS data files for each STS and N_sta value
+        energy_values = []
+        for n_sta in n_sta_values:
+            total_sts = np.genfromtxt(f'total_STS_{algo}_{sts}_{n_sta}.txt')  # replace with the actual file path
+            total_energy = total_sts * energy_per_slot + n_sta * additional_energy_per_sta
+            avg_energy = np.mean(total_energy)
+            energy_values.append(avg_energy)
 
-ax1.set_xlabel('Episode Number', fontsize=12)
-ax1.set_ylabel('Total STS', fontsize=12)
+        # Plot a bar for the current algorithm in each STS scenario
+        axs[ax_index].bar([p + bar_width*algo_index for p in bar_l], energy_values, 
+                           width=bar_width, color=colors[algo_index])
 
-# Set the grid
-ax1.grid(True)
+    # Set the x-axis ticks and labels
+    axs[ax_index].set_xticks(tick_pos)
+    axs[ax_index].set_xticklabels(n_sta_values)
 
-# Customize the tick labels size
-ax1.tick_params(axis='both', which='major', labelsize=10)
+    # Set axes title and labels
+    axs[ax_index].set_title(f'$STS_{{init}}$ = {sts}', fontsize=14)  # Use LaTeX syntax for subscript
+    if ax_index == 0:
+        axs[ax_index].set_ylabel('Average Energy', fontsize=12)
 
-# Combine the legends
-lines1, labels1 = ax1.get_legend_handles_labels()
-ax1.legend(lines1, labels1, fontsize=10)
+    # Enable grid lines
+    axs[ax_index].grid(True)
 
-# Set the title
-plt.title('Total STS per Episode for Three Algorithms', fontsize=14)
+    # Add the legend in the last subplot only
+    if ax_index == len(sts_values) - 1:
+        axs[ax_index].legend(algorithms, loc='upper right')
 
-# Save the plot as a high-quality image
-fig.savefig('Total STS per Episode for Three Algorithms(A-CvsQvsO)', dpi=300)
+# Add the common x-label for all subplots
+fig.text(0.5, 0.01, 'Number of STAs', ha='center', va='center', fontsize=12)
 
+# Save the figure
+plt.tight_layout()
+plt.savefig('Average_Energy_Algorithms.png', dpi=300)
+
+# Show the figure
 plt.show()

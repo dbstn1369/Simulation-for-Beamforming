@@ -10,37 +10,36 @@ os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
-num_states = 32  # Maximum number of connectable stations
+# STS와 SINR 범주 정의
+STS_thresholds = [4, 8, 12, 16, 20, 24, 28, 32]  # 8 categories
+SINR_thresholds = [-5, 0, 5, 30]  # 4 categories
+
+# 매핑 테이블 정의
+mapping_table = {}
+counter = 0
+for sts_state in range(len(STS_thresholds)):
+    for sinr_state in range(len(SINR_thresholds)):
+        mapping_table[(sts_state, sinr_state)] = counter
+        counter += 1
+
 num_actions = 3  # Increase, decrease, maintain
 num_sectors = 16  # Number of sectors
 
-# Update the q_table tensor to have 4 dimensions
-q_table = torch.zeros((num_states, num_states, num_actions, num_sectors), dtype=torch.float32, device=device)
+# Update the q_table tensor to have 2 dimensions
+q_table = torch.zeros((32, num_actions), dtype=torch.float32, device=device)
 
 learning_rate = 0.1
 discount_factor = 0.95
-exploration_rate = 1.0
-exploration_rate_decay = 0.001
+epsilon = 0.1
 
 
-def choose_action(state, sector_STS):
-    state = torch.as_tensor(state, dtype=torch.int64, device=device)
-    sector_STS = torch.as_tensor(sector_STS, dtype=torch.int64, device=device)
-    print(f"State: {state}")
-    print(f"Sector_STS: {sector_STS}")
-    print(f"Q-Table shape: {q_table.shape}")
-
-    assert torch.all(sector_STS < num_sectors), "sector_STS contains invalid sector index"
-    
-    if torch.rand(1).item() < exploration_rate:
-        return torch.randint(num_actions, (1,), device=device, dtype=torch.int64).item()
+def choose_action(state, AP_STS):
+    if np.random.uniform(0, 1) < epsilon:
+        action = np.random.choice([0, 1, 2])
     else:
-        q_values = q_table[state[0], state[1], :, sector_STS]
-
-        q_values_numpy = q_values.cpu().numpy()
-        max_indices = np.where(q_values_numpy == q_values_numpy.max())[0]
-        selected_index = np.random.choice(max_indices)
-        return selected_index.item()
+        q_values = q_table[state, :].cpu().numpy()  # Convert CUDA tensor to CPU tensor and then to NumPy array
+        action = np.argmax(q_values)
+    return action
 
 
 
@@ -50,22 +49,31 @@ def update_q_table(state, action, reward, next_state, sector_STS, next_sector_ST
 
     reward = torch.as_tensor(reward, dtype=torch.float32, device=device)
     action = torch.as_tensor(action, dtype=torch.int64, device=device)
-    sector_STS = torch.as_tensor(sector_STS, dtype=torch.int64, device=device)
-    next_sector_STS = torch.as_tensor(next_sector_STS, dtype=torch.int64, device=device)
 
-    if torch.all(next_state < num_states) and torch.all(next_sector_STS < num_sectors):
-        q_value = q_table[state[0], state[1], action, sector_STS]
-        max_next_q_value = torch.max(q_table[next_state[0], next_state[1], :, next_sector_STS])
-        target_q_value = reward + discount_factor * max_next_q_value
-        q_table[state[0], state[1], action, sector_STS] = q_value + learning_rate * (target_q_value - q_value)
-    else:
-        print(f"Ignoring invalid next_state: {next_state} or next_sector_STS: {next_sector_STS}")
+    q_value = q_table[state, action]
+    max_next_q_value = torch.max(q_table[next_state, :])
+    target_q_value = reward + discount_factor * max_next_q_value
+    q_table[state, action] = q_value + learning_rate * (target_q_value - q_value)
 
 
 def get_reward(successful_ssw_count, total_ssw_count):
     if total_ssw_count == 0:
         return 0
     return successful_ssw_count / total_ssw_count
+
+
+def get_state(STS, SINR):
+    STS_state = sum(STS > np.array(STS_thresholds)) - 1
+    if STS_state < 0:
+        STS_state = 0  # Assign a default state value if STS_state is less than 0
+    SINR_state = sum(SINR > np.array(SINR_thresholds)) - 1
+
+    # Retrieve the scalar state value from the mapping table
+    state = mapping_table.get((STS_state, SINR_state))
+    if state is None:
+        state = 0  # Assign a default state value if the mapping is not found
+    return state
+
 
 
 def get_new_state(connected_stations, sinr_values):
@@ -76,10 +84,11 @@ def get_new_state(connected_stations, sinr_values):
         sinr_mean = np.mean(sinr_values_filtered) if sinr_values_filtered else 0
 
     # Adjust the number of connected stations to be within the valid range
-    connected_stations = min(connected_stations, num_states - 1)
+    connected_stations = min(connected_stations, STS_thresholds[-1] - 1)
 
-    state = np.array([connected_stations, sinr_mean], dtype=np.int32)
-    return state, sinr_values
+    state = get_state(connected_stations, sinr_mean)
+    return state
+
 
 
 def SINR(received_signal, interfering_signals, noise_power=1e-9):
@@ -210,7 +219,7 @@ class Station:
         if not self.pair and STS == self.backoff_counts[sector]:
             self.rx_sector = None
             self.data_success = True
-            print(f"Station {self.id} transmitted SSW frame successfully")
+            #print(f"Station {self.id} transmitted SSW frame successfully")
             return random.uniform(0.0001, 0.001)
         return None
 
@@ -218,32 +227,35 @@ class Station:
         if not self.pair:
             if self.data_success:
                 self.pair = True
-                print(f"Station {self.id} received ACK successfully")
-        else:
-            print(f"Station {self.id} did not receive ACK, will retry in the next BI")
+                #print(f"Station {self.id} received ACK successfully")
+        #else:
+            #print(f"Station {self.id} did not receive ACK, will retry in the next BI")
 
 
 total_STS_used = 0
-with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as sts_file:
+with open('total_STS_Q.txt', 'a') as sts_file, open('Reward_Q.txt','a') as reward_file:
     for episode in range(10000):
+        total_reward = 0
+        step_count = 0
         STS = [32] * 16
-        AP = AccessPoint(num_stations=500, num_sector=num_sectors, STS=STS)
+        AP = AccessPoint(num_stations=500, num_sector=4, STS=STS)
         connected_stations = 0
-        total_time = 0
+        #total_time = 0
         total_STS_used = 0
-        learning_time = 0
-        start_time = time.time()
+        #learning_time = 0
+        #start_time = time.time()
 
         AP.start_beamforming_training()
 
         while not AP.all_stations_paired():
+            step_count += 1
             sinr_values = []
             connected_stations = sum(station.pair for station in AP.stations)
-            state, sinr_values = get_new_state(connected_stations, sinr_values)
+            state = get_new_state(connected_stations, sinr_values)
 
             sector_STS = AP.STS[:]
 
-            action = choose_action(state, sector_STS)
+            action = choose_action(state, AP.STS)
             if action == 0:
                 AP.STS = [min(32, sts + 1) for sts in AP.STS]
             elif action == 1:
@@ -260,33 +272,35 @@ with open('total_time_Q.txt', 'a') as time_file, open('total_STS_Q.txt', 'a') as
                 successful_ssw_count += successful_ssw_count_sector
 
             AP.broadcast_ack()
-            learning_start = time.time()
+            #learning_start = time.time()
 
-            print("Paired stations:")
-            for station in AP.stations:
-                if station.pair:
-                    print(station)
+            # print("Paired stations:")
+            # for station in AP.stations:
+            #     if station.pair:
+            #         print(station)
 
             if not AP.all_stations_paired():
                 total_STS_used += sum(AP.STS)
 
                 reward = get_reward(successful_ssw_count, sum(AP.STS))
+                reward_file.write(f"{reward}\n")
+                total_reward += reward
                 connected_stations = sum(station.pair for station in AP.stations)
-                next_state, _ = get_new_state(connected_stations, sinr_values)
+                next_state = get_new_state(connected_stations, sinr_values)
 
                 next_sector_STS = AP.STS[:]
                 update_q_table(state, action, reward, next_state, sector_STS, next_sector_STS)
-                learning_end = time.time()  # End timing learning
-                learning_time += learning_end - learning_start  # Increment total learning time 
+                #learning_end = time.time()  # End timing learning
+                #learning_time += learning_end - learning_start  # Increment total learning time
 
 
                 AP.next_bi()
 
-        end_time = time.time()
-        total_time = end_time - start_time - learning_time
+        #end_time = time.time()
+        #total_time = end_time - start_time - learning_time
         print(f"EPISODE: {episode} All stations are paired. Simulation complete.")
-        print(f"Total simulation time: {total_time:.3f} seconds")
-        time_file.write(f"{total_time:.3f}\n")
+        #print(f"Total simulation time: {total_time:.3f} seconds")
+        print("Episode: {}, Total Reward: {}, Step Count: {}".format(episode, total_reward, step_count))
+        #time_file.write(f"{total_time:.3f}\n")
         sts_file.write(f"{total_STS_used}\n")
-
-        exploration_rate = max(0.01, exploration_rate - exploration_rate_decay)
+        

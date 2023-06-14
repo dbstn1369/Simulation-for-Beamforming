@@ -99,12 +99,9 @@ def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
     actor_optimizer.step()
 
 
-# def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
-#     return
-
 
 def get_reward(AP, successful_ssw_count, STS, bi, i):
-    c1, c2, c3, c4 = 1, 1, 0.1, 1
+    c1, c2, c3, c4 = 0.2, 0.8, 0.1, 0.9
 
     U = successful_ssw_count / (STS) 
     T_max = 32
@@ -129,20 +126,19 @@ def get_new_state(AP):
     return AP.sector_states
 
 
-
-with open('total_time_AC.txt', 'a') as time_file, open('total_STS_AC.txt', 'a') as sts_file, open('Reward_AC.txt', 'a') as reward_file:
+with open('total_STS_AC.txt', 'a') as sts_file, open('Reward_AC.txt', 'a') as reward_file:
     for episode in range(10000):
        
         STS = [32] * 16
         AP = AccessPoint(num_stations=500, STS=STS)
         
         connected_stations = []
-        total_time = 0
-        learning_time = 0
+        #total_time = 0
+        #learning_time = 0
         successful_ssw_count = 0
         bi = 0
-        start_time = time.time()
-        s_time = start_time
+        #start_time = time.time()
+        #s_time = start_time
 
         AP.start_beamforming_training()
         
@@ -158,7 +154,7 @@ with open('total_time_AC.txt', 'a') as time_file, open('total_STS_AC.txt', 'a') 
                 successful_ssw_count = len(AP.ssw_list)
                 AP.broadcast_ack()
 
-                learning_start = time.time()
+                #learning_start = time.time()
 
                 states = get_new_state(AP)
                 
@@ -166,7 +162,6 @@ with open('total_time_AC.txt', 'a') as time_file, open('total_STS_AC.txt', 'a') 
                 new_STS = choose_action(states[i], successful_ssw_count, bi, i, episode)
 
 
-                #new_STS = 32 
 
                 #print(f"Sector: {i}")  
                 #print("STS: "+ str(new_STS)) 
@@ -188,8 +183,8 @@ with open('total_time_AC.txt', 'a') as time_file, open('total_STS_AC.txt', 'a') 
                     batch = memory_buffer.sample(batch_size)
                     update_actor_critic_batch(batch, critic_optimizer, actor_optimizer)
                     
-                learning_end = time.time()  # End timing learning
-                learning_time += learning_end - learning_start  # Increment total learning time 
+                #learning_end = time.time()  # End timing learning
+                #learning_time += learning_end - learning_start  # Increment total learning time 
 
             if not AP.all_stations_paired():
                 #print("Not all stations are paired. Starting next BI process.")
@@ -198,12 +193,12 @@ with open('total_time_AC.txt', 'a') as time_file, open('total_STS_AC.txt', 'a') 
                 #print("BI: " + str(bi) )
             
             
-        end_time = time.time()
-        total_time = end_time - start_time - learning_time  # Subtract the learning time from the total time
+        #end_time = time.time()
+        #total_time = end_time - start_time - learning_time  # Subtract the learning time from the total time
         print(f"Episode: {episode}")
         print(f"Total_STS_used: {AP.total_STS_used}")
             
-        time_file.write(f"{total_time:.3f}\n")
+        #time_file.write(f"{total_time:.3f}\n")
         sts_file.write(str(AP.total_STS_used) + "\n")
 
 
@@ -212,7 +207,6 @@ with open('total_time_AC.txt', 'a') as time_file, open('total_STS_AC.txt', 'a') 
     print("Memory Used: ", torch.cuda.memory_allocated())
     print("Memory Reserved: ", torch.cuda.memory_reserved())
     torch.cuda.empty_cache()
-
 
 
 
