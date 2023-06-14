@@ -109,8 +109,8 @@ def SNR():
 class AccessPoint:
     def __init__(self, num_stations, num_sector, STS):
         self.num_stations = num_stations
-        self.num_sector = num_sector
-        self.STS = [STS[sector] for sector in range(num_sector)]
+        self.num_sector = num_sectors
+        self.STS = [STS[sector] for sector in range(num_sectors)]
         self.stations = [Station(i, num_sector, self) for i in range(num_stations)]
         self.sinr_values = [[] for _ in range(num_sector)]
         self.collisions = 0
@@ -134,7 +134,7 @@ class AccessPoint:
         for station in self.stations:
             for i in range(self.STS[sector]):
                 if not station.pair and sector == station.tx_sector_AP and station not in sent_stations:
-                    signal = station.send_ssw(i, sector)
+                    signal = station.send_ssw(i, sector) #sector error - > STA(o) ,  AP (X)
                     if signal is not None:
                         received_signals.append((i, signal, station))
                         sts_counter[i] += 1
