@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import scienceplots
+
 
 # Set the font family to a specific font, e.g., 'Arial'
 mpl.rcParams['font.family'] = 'Times New Roman'
@@ -28,13 +30,18 @@ episode_numbers_avg = np.arange(1, len(total_times_avg_algo1) + 1) * bin_size
 # Set the plot style to 'classic' for a more suitable style for IEEE papers
 plt.style.use('classic')
 
+#plt.style.use(['science','ieee'])
+
+
 # Create the plot
 fig, ax1 = plt.subplots()
 
-# Plot the time data on the first y-axis
-ax1.plot(episode_numbers_avg, total_times_avg_algo1, label='Time A-C', color='#ff5733', marker='s')
-ax1.plot(episode_numbers_avg, total_times_avg_algo2, label='Time Q', color='#33ff57', marker='^')
-ax1.plot(episode_numbers_avg, total_times_avg_algo3, label='Time O', color='#3357ff', marker='o')
+# # Plot the time data on the first y-axis
+ax1.plot(episode_numbers_avg, total_times_avg_algo1, label='Time A-C', color='#d62728', marker='s', linestyle='-', linewidth = 3)
+ax1.plot(episode_numbers_avg, total_times_avg_algo2, label='Time Q', color='#2ca02c', marker='^', linestyle='--', linewidth = 3)
+ax1.plot(episode_numbers_avg, total_times_avg_algo3, label='Time O', color='#1f77b4', marker='o', linestyle='-.', linewidth = 3)
+
+
 ax1.set_xlabel('Episode Number', fontsize=12)
 ax1.set_ylabel('Time (ms)', fontsize=12)
 
@@ -44,7 +51,7 @@ ax1.set_ylabel('Time (ms)', fontsize=12)
 ax1.grid(True)
 
 # Customize the tick labels size
-ax1.tick_params(axis='both', which='major', labelsize=10)
+ax1.tick_params(axis='both', which='major', labelsize=12)
 
 # Combine the legends of both y-axes
 lines1, labels1 = ax1.get_legend_handles_labels()

@@ -33,6 +33,8 @@ discount_factor = 0.95
 epsilon = 0.1
 
 
+
+
 def choose_action(state, AP_STS):
     if np.random.uniform(0, 1) < epsilon:
         action = np.random.choice([0, 1, 2])
@@ -43,7 +45,7 @@ def choose_action(state, AP_STS):
 
 
 
-def update_q_table(state, action, reward, next_state, sector_STS, next_sector_STS):
+def update_q_table(state, action, reward, next_state):
     state = torch.as_tensor(state, dtype=torch.int64, device=device)
     next_state = torch.as_tensor(next_state, dtype=torch.int64, device=device)
 
@@ -134,7 +136,7 @@ class AccessPoint:
         for station in self.stations:
             for i in range(self.STS[sector]):
                 if not station.pair and sector == station.tx_sector_AP and station not in sent_stations:
-                    signal = station.send_ssw(i, sector) #sector error - > STA(o) ,  AP (X)
+                    signal = station.send_ssw(i, station.rx_sector) #sector error - > STA(o) ,  AP (X)
                     if signal is not None:
                         received_signals.append((i, signal, station))
                         sts_counter[i] += 1
@@ -175,9 +177,9 @@ class AccessPoint:
 
     def next_bi(self):
         self.start_beamforming_training()
-        for i in range(self.num_sector):
-            successful_ssw_count, sinr_values = self.receive(i)
-        self.broadcast_ack()
+        for station in self.stations:
+            station.reset_backoff_counts(self)
+        
 
     def all_stations_paired(self):
         return all(station.pair for station in self.stations)
@@ -194,6 +196,9 @@ class Station:
         self.sectors = [i for i in range(num_sector)]
         self.backoff_counts = [random.randint(0, AP.STS[i] - 1) for i in range(num_sector)]
 
+    def reset_backoff_counts(self, AP):
+        self.backoff_counts = [random.randint(0, AP.STS[i] - 1) for i in range(AP.num_sector)]
+
     def __str__(self):
         return f"Station {self.id}: paired={self.pair}, tx_sector_AP={self.tx_sector_AP}, rx_sector={self.rx_sector}"
 
@@ -207,10 +212,10 @@ class Station:
         return best_sector
 
     def receive_trn_r(self, beacon_frame):
-        best_rx_sector = self.get_best_rx_sector(beacon_frame)
+        best_rx_sector = self.get_best_rx_sector()
         self.rx_sector = best_rx_sector
 
-    def get_best_rx_sector(self, beacon_frame):
+    def get_best_rx_sector(self):
         snr_values = SNR()
         best_rx_sector = np.argmax(snr_values) % len(self.sectors)
         return best_rx_sector
@@ -232,75 +237,65 @@ class Station:
             #print(f"Station {self.id} did not receive ACK, will retry in the next BI")
 
 
-total_STS_used = 0
+
+
 with open('total_STS_Q.txt', 'a') as sts_file, open('Reward_Q.txt','a') as reward_file:
-    for episode in range(10000):
+    for episode in range(1000):
         total_reward = 0
         step_count = 0
-        STS = [32] * 16
-        AP = AccessPoint(num_stations=500, num_sector=4, STS=STS)
+        STS = [8] * 16
+        AP = AccessPoint(num_stations=200, num_sector=4, STS=STS)
         connected_stations = 0
-        #total_time = 0
         total_STS_used = 0
-        #learning_time = 0
-        #start_time = time.time()
 
         AP.start_beamforming_training()
 
-        while not AP.all_stations_paired():
-            step_count += 1
-            sinr_values = []
-            connected_stations = sum(station.pair for station in AP.stations)
-            state = get_new_state(connected_stations, sinr_values)
-
-            sector_STS = AP.STS[:]
-
-            action = choose_action(state, AP.STS)
-            if action == 0:
-                AP.STS = [min(32, sts + 1) for sts in AP.STS]
-            elif action == 1:
-                AP.STS = [max(5, sts - 1) for sts in AP.STS]
-            elif action == 2:
-                AP.STS = AP.STS
-
-            successful_ssw_count = 0
-            sinr_values = []
+        while not AP.all_stations_paired(): 
             for i in range(AP.num_sector):
-                sinr_values_sector, successful_ssw_count_sector = AP.receive(i)
-                if sinr_values_sector:
-                    sinr_values.extend(sinr_values_sector)
-                successful_ssw_count += successful_ssw_count_sector
-
-            AP.broadcast_ack()
-            #learning_start = time.time()
-
-            # print("Paired stations:")
-            # for station in AP.stations:
-            #     if station.pair:
-            #         print(station)
-
-            if not AP.all_stations_paired():
-                total_STS_used += sum(AP.STS)
-
-                reward = get_reward(successful_ssw_count, sum(AP.STS))
-                reward_file.write(f"{reward}\n")
-                total_reward += reward
+                step_count += 1
+                sinr_values = []
                 connected_stations = sum(station.pair for station in AP.stations)
-                next_state = get_new_state(connected_stations, sinr_values)
+                state = get_new_state(connected_stations, sinr_values)
 
-                next_sector_STS = AP.STS[:]
-                update_q_table(state, action, reward, next_state, sector_STS, next_sector_STS)
-                #learning_end = time.time()  # End timing learning
-                #learning_time += learning_end - learning_start  # Increment total learning time
+                sector_STS = AP.STS[i]
+
+                action = choose_action(state, AP.STS[i])
+                if action == 0:
+                    AP.STS[i] = min(32, AP.STS[i] + 1)
+                elif action == 1:
+                    AP.STS[i] = max(2, AP.STS[i] - 1)
+                elif action == 2:
+                    pass
+
+                sinr_values_sector, successful_ssw_count = AP.receive(i)
+                sinr_values.extend(sinr_values_sector)
+                AP.broadcast_ack()
+
+                # print("Paired stations:")
+                # for station in AP.stations:
+                #     if station.pair:
+                #         print(station)
+
+                total_STS_used += AP.STS[i]
+
+                if not AP.all_stations_paired():
+                    reward = get_reward(successful_ssw_count, AP.STS[i])
+                    total_reward += reward
+                    connected_stations = sum(station.pair for station in AP.stations)
+                    next_state = get_new_state(connected_stations, sinr_values)
+
+                    next_sector_STS = AP.STS[i]
+                    update_q_table(state, action, reward, next_state)
+                    AP.next_bi()
+                   
+
+        #print(f"EPISODE: {episode} All stations are paired. Simulation complete.")
 
 
-                AP.next_bi()
 
-        #end_time = time.time()
-        #total_time = end_time - start_time - learning_time
-        print(f"EPISODE: {episode} All stations are paired. Simulation complete.")
-        #print(f"Total simulation time: {total_time:.3f} seconds")
         print("Episode: {}, Total Reward: {}, Step Count: {}".format(episode, total_reward, step_count))
-        #time_file.write(f"{total_time:.3f}\n")
+
+
         sts_file.write(f"{total_STS_used}\n")
+        reward_file.write(f"{total_reward}\n")
         

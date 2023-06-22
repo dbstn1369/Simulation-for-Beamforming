@@ -2,16 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
+
 mpl.rcParams['font.family'] = 'Times New Roman'
 
 # Define the N_sta values, STS values, and the algorithm names
-n_sta_values = [500, 500, 500, 500]
-sts_values = [32, 32, 32, 32]
+n_sta_values = [200, 300, 400, 500]
+sts_values = [16, 16, 16, 32]
 algorithms = ['Actor-Critic', 'Q-learning', 'Original']
 
 # Bar width and colors
 bar_width = 0.15
-colors = ['#ff5733', '#33ff57', '#3357ff']
+colors = ['#26456e', '#3a87b7', '#b4d4da']
 
 # Assume the energy per slot
 energy_per_slot = 0.001  # e.g., 0.001 Joules

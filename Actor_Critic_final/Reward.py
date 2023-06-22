@@ -4,10 +4,10 @@ import matplotlib as mpl
 import pandas as pd
 
 # Your existing code...
-episode_times = np.genfromtxt('Reward_AC.txt')
+episode_times = np.genfromtxt('Reward_Q.txt')
 episode_numbers = np.arange(1, len(episode_times) + 1)
 
-bin_size = 1000
+bin_size = 10
 episode_times_avg = np.mean(episode_times.reshape(-1, bin_size), axis=1)
 episode_numbers_avg = np.arange(1, len(episode_times_avg) + 1) * bin_size
 
@@ -26,5 +26,5 @@ ax.set_ylabel('Reward', fontsize=12)
 #ax.set_title('Reward per Episode', fontsize=14)
 ax.grid(True)
 ax.tick_params(axis='both', which='major', labelsize=10)
-fig.savefig('Reward_AC_per_episode.png', dpi=300)
+fig.savefig('Reward_Q.png', dpi=300)
 plt.show()

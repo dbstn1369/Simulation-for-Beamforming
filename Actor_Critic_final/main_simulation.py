@@ -127,12 +127,13 @@ def get_new_state(AP):
 
 
 with open('total_STS_AC.txt', 'a') as sts_file, open('Reward_AC.txt', 'a') as reward_file:
-    for episode in range(10000):
+    for episode in range(1000):
        
-        STS = [32] * 16
+        STS = [8] * 16
         AP = AccessPoint(num_stations=500, STS=STS)
         
         connected_stations = []
+        total_reward = 0 
         #total_time = 0
         #learning_time = 0
         successful_ssw_count = 0
@@ -174,7 +175,8 @@ with open('total_STS_AC.txt', 'a') as sts_file, open('Reward_AC.txt', 'a') as re
 
                 
                 reward = get_reward(AP,successful_ssw_count, new_STS, bi, i)  # Pass the prev_STS variable
-                reward_file.write(f"{reward:.3f}\n")
+                total_reward += reward
+                
                 successful_ssw_count = 0
                 next_state = get_new_state(AP)
                 memory_buffer.push(states, new_STS-2, reward, next_state)
@@ -200,7 +202,7 @@ with open('total_STS_AC.txt', 'a') as sts_file, open('Reward_AC.txt', 'a') as re
             
         #time_file.write(f"{total_time:.3f}\n")
         sts_file.write(str(AP.total_STS_used) + "\n")
-
+        reward_file.write(f"{total_reward:.3f}\n")
 
     print("Number of GPUs: ", torch.cuda.device_count())
     print("GPU name: ", torch.cuda.get_device_name(0))
