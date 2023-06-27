@@ -7,7 +7,7 @@ mpl.rcParams['font.family'] = 'Times New Roman'
 
 # Define the N_sta values, STS values, and the algorithm names
 n_sta_values = [200, 300, 400, 500]
-sts_values = [16, 16, 16, 32]
+sts_values = [4, 8, 16, 32]
 algorithms = ['Actor-Critic', 'Q-learning', 'Original']
 
 # Bar width and colors

@@ -9,12 +9,12 @@ mpl.rcParams['font.family'] = 'Times New Roman'
 total_times_algo1 = np.genfromtxt('total_time_AC.txt')
 
 # convert microseconds to milliseconds
-total_times_algo1 = total_times_algo1 / 1000
+#total_times_algo1 = total_times_algo1 / 1000
 
 # 에피소드 번호 생성 (1부터 시작)
 episode_numbers = np.arange(1, len(total_times_algo1) + 1)
 
-bin_size = 100
+bin_size = 1000
 total_times_avg_algo1 = np.mean(total_times_algo1.reshape(-1, bin_size), axis=1)
 
 episode_numbers_avg = np.arange(1, len(total_times_avg_algo1) + 1) * bin_size

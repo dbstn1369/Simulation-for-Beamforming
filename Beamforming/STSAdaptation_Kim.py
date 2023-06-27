@@ -240,13 +240,14 @@ class Station:
 
 
 with open('total_STS_Q.txt', 'a') as sts_file, open('Reward_Q.txt','a') as reward_file:
-    for episode in range(1000):
+    for episode in range(10000):
         total_reward = 0
         step_count = 0
-        STS = [8] * 16
-        AP = AccessPoint(num_stations=200, num_sector=4, STS=STS)
+        STS = [16] * 16
+        AP = AccessPoint(num_stations=500, num_sector=4, STS=STS)
         connected_stations = 0
         total_STS_used = 0
+        bi = 0
 
         AP.start_beamforming_training()
 
@@ -287,6 +288,7 @@ with open('total_STS_Q.txt', 'a') as sts_file, open('Reward_Q.txt','a') as rewar
                     next_sector_STS = AP.STS[i]
                     update_q_table(state, action, reward, next_state)
                     AP.next_bi()
+                    bi += 1
                    
 
         #print(f"EPISODE: {episode} All stations are paired. Simulation complete.")
@@ -296,6 +298,7 @@ with open('total_STS_Q.txt', 'a') as sts_file, open('Reward_Q.txt','a') as rewar
         print("Episode: {}, Total Reward: {}, Step Count: {}".format(episode, total_reward, step_count))
 
 
-        sts_file.write(f"{total_STS_used}\n")
+        #sts_file.write(f"{total_STS_used}\n")
+        sts_file.write(str(bi) + "\n")
         reward_file.write(f"{total_reward}\n")
         

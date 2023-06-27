@@ -101,7 +101,7 @@ def update_actor_critic_batch(batch, critic_optimizer, actor_optimizer):
 
 
 def get_reward(AP, successful_ssw_count, STS, bi, i):
-    c1, c2, c3, c4 = 0.2, 0.8, 0.1, 0.9
+    c1, c2, c3, c4 = 1, 1, 0.5, 1
 
     U = successful_ssw_count / (STS) 
     T_max = 32
@@ -127,19 +127,17 @@ def get_new_state(AP):
 
 
 with open('total_STS_AC.txt', 'a') as sts_file, open('Reward_AC.txt', 'a') as reward_file:
-    for episode in range(1000):
+    for episode in range(10000):
        
-        STS = [8] * 16
+        STS = [16] * 16
         AP = AccessPoint(num_stations=500, STS=STS)
         
         connected_stations = []
         total_reward = 0 
-        #total_time = 0
-        #learning_time = 0
+     
         successful_ssw_count = 0
         bi = 0
-        #start_time = time.time()
-        #s_time = start_time
+      
 
         AP.start_beamforming_training()
         
@@ -155,7 +153,7 @@ with open('total_STS_AC.txt', 'a') as sts_file, open('Reward_AC.txt', 'a') as re
                 successful_ssw_count = len(AP.ssw_list)
                 AP.broadcast_ack()
 
-                #learning_start = time.time()
+        
 
                 states = get_new_state(AP)
                 
@@ -184,9 +182,7 @@ with open('total_STS_AC.txt', 'a') as sts_file, open('Reward_AC.txt', 'a') as re
                 if len(memory_buffer) >= batch_size:
                     batch = memory_buffer.sample(batch_size)
                     update_actor_critic_batch(batch, critic_optimizer, actor_optimizer)
-                    
-                #learning_end = time.time()  # End timing learning
-                #learning_time += learning_end - learning_start  # Increment total learning time 
+ 
 
             if not AP.all_stations_paired():
                 #print("Not all stations are paired. Starting next BI process.")
@@ -195,13 +191,11 @@ with open('total_STS_AC.txt', 'a') as sts_file, open('Reward_AC.txt', 'a') as re
                 #print("BI: " + str(bi) )
             
             
-        #end_time = time.time()
-        #total_time = end_time - start_time - learning_time  # Subtract the learning time from the total time
         print(f"Episode: {episode}")
         print(f"Total_STS_used: {AP.total_STS_used}")
             
-        #time_file.write(f"{total_time:.3f}\n")
-        sts_file.write(str(AP.total_STS_used) + "\n")
+        #sts_file.write(str(AP.total_STS_used) + "\n")
+        sts_file.write(str(bi) + "\n")
         reward_file.write(f"{total_reward:.3f}\n")
 
     print("Number of GPUs: ", torch.cuda.device_count())

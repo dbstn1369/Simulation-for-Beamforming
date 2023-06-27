@@ -175,9 +175,9 @@ def SNR_AP(station_id, distance):
 
 
 with open('total_STS_O.txt', 'a') as sts_file :
-    for episode in range(1000):
-        STS = [8] * 16
-        AP = AccessPoint(num_stations=200, STS=STS)
+    for episode in range(10000):
+        STS = [16] * 16
+        AP = AccessPoint(num_stations=500, STS=STS)
         
         connected_stations = []
         successful_ssw_count = 0
@@ -194,7 +194,7 @@ with open('total_STS_O.txt', 'a') as sts_file :
                 AP.broadcast_ack()
 
                 
-                new_STS = 8
+                new_STS = 16
 
                 AP.update_STS(i, new_STS)
                 AP.total_STS_used += new_STS
@@ -210,4 +210,6 @@ with open('total_STS_O.txt', 'a') as sts_file :
         print(f"Episode: {episode}")
         print(f"Total_STS_used: {AP.total_STS_used}")
             
-        sts_file.write(str(AP.total_STS_used) + "\n")
+        #sts_file.write(str(AP.total_STS_used) + "\n")
+        sts_file.write(str(bi) + "\n")
+        

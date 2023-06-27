@@ -12,10 +12,10 @@ total_times_algo1 = np.genfromtxt('total_time_AC.txt')
 total_times_algo2 = np.genfromtxt('total_time_Q.txt')
 total_times_algo3 = np.genfromtxt('total_time_O.txt')
 
-# convert microseconds to milliseconds
-total_times_algo1 = total_times_algo1 / 1000
-total_times_algo2 = total_times_algo2 / 1000
-total_times_algo3 = total_times_algo3 / 1000
+# convert milliseconds to s
+# total_times_algo1 = total_times_algo1 / 1000
+# total_times_algo2 = total_times_algo2 / 1000
+# total_times_algo3 = total_times_algo3 / 1000
 
 # 에피소드 번호 생성 (1부터 시작)
 episode_numbers = np.arange(1, len(total_times_algo1) + 1)
